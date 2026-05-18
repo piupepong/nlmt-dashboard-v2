@@ -517,8 +517,8 @@ let pulse = 0;
 function resizeFlow() {
     const container = canvas.parentElement;
     width = container.clientWidth;
-    height = container.clientHeight || (window.innerWidth <= 860 ? 520 : 360);
-    if (window.innerWidth <= 560) height = 540;
+    const fallbackHeight = window.innerWidth <= 560 ? 760 : window.innerWidth <= 860 ? 720 : 360;
+    height = container.clientHeight || fallbackHeight;
     canvas.width = width;
     canvas.height = height;
     updateNodeCoords();
@@ -529,11 +529,11 @@ window.addEventListener('resize', resizeFlow);
 function updateNodeCoords() {
     if (width <= 620) {
         nodes = {
-            pv: {x: width * 0.28, y: height * 0.18, label: 'PV', color: '#f5b64a'},
-            grid: {x: width * 0.72, y: height * 0.18, label: 'Bù lưới', color: '#8db5ff'},
-            inverter: {x: width * 0.5, y: height * 0.46, label: 'Inverter', color: '#ffffff'},
-            load: {x: width * 0.28, y: height * 0.78, label: 'Tải', color: '#78dce3'},
-            battery: {x: width * 0.72, y: height * 0.78, label: 'Pin', color: '#78c9b5'}
+            pv: {x: width * 0.23, y: height * 0.16, label: 'PV', color: '#f5b64a'},
+            grid: {x: width * 0.77, y: height * 0.16, label: 'Bù lưới', color: '#8db5ff'},
+            inverter: {x: width * 0.5, y: height * 0.45, label: 'Inverter', color: '#ffffff'},
+            load: {x: width * 0.23, y: height * 0.72, label: 'Tải', color: '#78dce3'},
+            battery: {x: width * 0.77, y: height * 0.82, label: 'Pin', color: '#78c9b5'}
         };
     } else {
         nodes = {
@@ -549,9 +549,9 @@ function updateNodeCoords() {
 function placeCard(id, x, y) {
     const card = document.getElementById(id);
     if (!card) return;
-    const cardWidth = card.offsetWidth || (width <= 620 ? 142 : 168);
-    const cardHeight = card.offsetHeight || (width <= 620 ? 150 : 170);
-    const margin = width <= 620 ? 10 : 18;
+    const cardWidth = card.offsetWidth || (width <= 620 ? 160 : 168);
+    const cardHeight = card.offsetHeight || (width <= 620 ? 122 : 170);
+    const margin = width <= 620 ? 12 : 18;
     const left = Math.max(margin, Math.min(width - cardWidth - margin, x - cardWidth / 2));
     const top = Math.max(margin, Math.min(height - cardHeight - margin, y - cardHeight / 2));
     card.style.left = `${left}px`;
@@ -630,7 +630,9 @@ function drawCurve(link, active) {
 }
 
 function drawNode(node, active) {
-    const radius = active ? 34 + Math.sin(pulse) * 3 : 28;
+    const baseRadius = width <= 620 ? 36 : 28;
+    const activeRadius = width <= 620 ? 45 : 34;
+    const radius = active ? activeRadius + Math.sin(pulse) * 3 : baseRadius;
     const glow = ctx.createRadialGradient(node.x, node.y, 4, node.x, node.y, radius * 2.4);
     glow.addColorStop(0, active ? node.color : 'rgba(255,255,255,0.72)');
     glow.addColorStop(0.38, active ? `${node.color}55` : 'rgba(255,255,255,0.18)');

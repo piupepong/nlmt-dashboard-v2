@@ -976,46 +976,74 @@ footer {
     }
 
     .flow-canvas-wrap {
-        height: 620px;
-        min-height: 620px;
+        height: 720px;
+        min-height: 720px;
+        border-radius: 24px;
+        background:
+            radial-gradient(circle at 22% 16%, rgba(255, 200, 87, 0.18), transparent 24%),
+            radial-gradient(circle at 78% 18%, rgba(156, 188, 255, 0.15), transparent 24%),
+            radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.12), transparent 23%),
+            radial-gradient(circle at 24% 72%, rgba(92, 200, 255, 0.15), transparent 22%),
+            radial-gradient(circle at 78% 82%, rgba(91, 240, 201, 0.16), transparent 22%),
+            linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.018));
+    }
+
+    .flow-canvas-wrap::before {
+        inset: 18px;
+        border-radius: 20px;
+        background-size: 82px 82px;
+        opacity: 0.62;
     }
 
     .floating-card {
-        width: 142px;
-        min-width: 142px;
-        padding: 8px;
-        border-radius: 14px;
+        width: clamp(150px, 42vw, 172px);
+        min-width: 150px;
+        padding: 13px 12px;
+        border-radius: 22px;
+        text-align: left;
+        background:
+            radial-gradient(circle at 80% 24%, rgba(255, 255, 255, 0.22), transparent 35%),
+            linear-gradient(145deg, rgba(16, 36, 48, 0.96), rgba(19, 52, 58, 0.82));
+        box-shadow: 0 22px 50px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.14);
     }
 
     .fc-main {
-        font-size: 1.18rem;
+        margin-top: 12px;
+        font-size: 1.76rem;
+        line-height: 0.98;
     }
 
     .fc-sub {
-        font-size: 0.66rem;
+        margin-top: 9px;
+        font-size: 0.84rem;
+        line-height: 1.25;
     }
 
     .fc-icon {
-        width: 24px;
-        height: 24px;
-        font-size: 0.78rem;
+        width: 38px;
+        height: 38px;
+        border-radius: 15px;
+        font-size: 1.1rem;
     }
 
     .fc-title {
-        font-size: 0.62rem;
+        font-size: 0.78rem;
     }
 
     .fc-data-grid {
-        grid-template-columns: 1fr;
-        gap: 5px;
+        display: none;
     }
 
-    .fc-data-grid div {
-        padding: 5px 6px;
+    .fc-meta {
+        min-height: 28px;
+        margin-top: 11px;
+        padding: 6px 10px;
+        font-size: 0.74rem;
     }
 
-    .fc-data-grid strong {
-        font-size: 0.7rem;
+    .fc-mini-bar {
+        height: 11px;
+        margin-top: 12px;
     }
 }
 
@@ -1039,7 +1067,16 @@ footer {
     }
 
     .flow-canvas-wrap {
-        height: 650px;
-        min-height: 650px;
+        height: 760px;
+        min-height: 760px;
+    }
+
+    .floating-card {
+        width: clamp(148px, 43vw, 166px);
+        min-width: 148px;
+    }
+
+    .fc-main {
+        font-size: 1.62rem;
     }
 }
