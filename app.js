@@ -34,7 +34,7 @@ let estimatedProduction = {
 const sensorMap = {
     'sensor-cong_suat_pv': 'pv',
     'sensor-cong_suat_tai': 'load',
-    'sensor-can_bang_cong_suat': 'bat',
+    'sensor-can_bang_cong_suat': 'balancePower',
     'sensor-cong_suat_luoi': 'grid',
     'sensor-dien_ap_pv': 'pvVoltage',
     'sensor-dong_pv': 'pvCurrent',
@@ -553,7 +553,7 @@ const flowLinks = [
     {from:'inverter', to:'load', key:'load', color:'#78dce3', liftDesktop:-58, liftMobile:-42},
     {from:'inverter', to:'battery', key:'batCharge', color:'#78c9b5', liftDesktop:54, liftMobile:42},
     {from:'battery', to:'inverter', key:'batDischarge', color:'#78c9b5', liftDesktop:54, liftMobile:42},
-    {from:'grid', to:'inverter', key:'gridOffset', color:'#8db5ff', liftDesktop:-18, liftMobile:-42},
+    {from:'grid', to:'load', key:'gridOffset', color:'#8db5ff', liftDesktop:58, liftMobile:42},
     {from:'inverter', to:'grid', key:'gridSurplus', color:'#f5b64a', liftDesktop:-18, liftMobile:-42}
 ];
 
@@ -850,13 +850,21 @@ function rowToHistorySample(row) {
         ts: new Date(row.ts).getTime(),
         pv: row.pv_w === null ? null : Number(row.pv_w),
         load: row.load_w === null ? null : Number(row.load_w),
-        bat: row.battery_w === null ? null : Number(row.battery_w),
+        bat: rowBatteryPower(row),
         grid: row.grid_w === null ? null : Number(row.grid_w),
         soc: row.soc_percent === null ? null : Number(row.soc_percent),
         voltage: row.battery_voltage_v === null ? null : Number(row.battery_voltage_v),
         invTemp: row.inverter_temp_c === null ? null : Number(row.inverter_temp_c),
         mosTemp: row.mos_temp_c === null ? null : Number(row.mos_temp_c)
     };
+}
+
+function rowBatteryPower(row) {
+    const current = row.jk_current_a === null || row.jk_current_a === undefined ? null : Number(row.jk_current_a);
+    const voltage = row.battery_voltage_v === null || row.battery_voltage_v === undefined ? null : Number(row.battery_voltage_v);
+    if (Number.isFinite(current) && Number.isFinite(voltage)) return current * voltage;
+    const fallback = row.battery_w === null || row.battery_w === undefined ? null : Number(row.battery_w);
+    return Number.isFinite(fallback) ? fallback : null;
 }
 
 function applyRowNumber(key, value) {
@@ -868,7 +876,7 @@ function applyRowNumber(key, value) {
 function applyRealtimeRow(row) {
     applyRowNumber('pv', row.pv_w);
     applyRowNumber('load', row.load_w);
-    applyRowNumber('bat', row.battery_w);
+    applyRowNumber('bat', rowBatteryPower(row));
     applyRowNumber('grid', row.grid_w);
     applyRowNumber('soc', row.soc_percent);
     applyRowNumber('battVoltage', row.battery_voltage_v);
@@ -1007,7 +1015,7 @@ async function loadHistoryFromSupabase() {
         for (let offset = 0; offset < 100000; offset += pageSize) {
             let query = supabaseClient
                 .from(SUPABASE_TABLE)
-                .select('ts,pv_w,load_w,battery_w,grid_w,soc_percent,battery_voltage_v,inverter_temp_c,mos_temp_c')
+                .select('ts,pv_w,load_w,battery_w,grid_w,soc_percent,battery_voltage_v,jk_current_a,inverter_temp_c,mos_temp_c')
                 .eq('device_id', DEVICE_ID)
                 .lte('ts', new Date(to).toISOString())
                 .order('ts', { ascending: true })
@@ -1092,7 +1100,7 @@ async function loadProductionFromSupabase() {
         for (let offset = 0; offset < 50000; offset += pageSize) {
             const { data: page, error } = await supabaseClient
                 .from(SUPABASE_TABLE)
-                .select('ts,pv_w,battery_w,daily_charge_kwh,daily_discharge_kwh,daily_pv_kwh,month_charge_kwh,month_discharge_kwh,month_pv_kwh')
+                .select('ts,pv_w,battery_w,battery_voltage_v,jk_current_a,daily_charge_kwh,daily_discharge_kwh,daily_pv_kwh,month_charge_kwh,month_discharge_kwh,month_pv_kwh')
                 .eq('device_id', DEVICE_ID)
                 .gte('ts', new Date(from).toISOString())
                 .lte('ts', new Date(now).toISOString())
@@ -1106,7 +1114,7 @@ async function loadProductionFromSupabase() {
         const samples = data.map(row => ({
             ts: new Date(row.ts).getTime(),
             pv: row.pv_w === null ? null : Number(row.pv_w),
-            bat: row.battery_w === null ? null : Number(row.battery_w)
+            bat: rowBatteryPower(row)
         }));
         applyEstimatedProduction(samples, data);
         updateOtherUI();

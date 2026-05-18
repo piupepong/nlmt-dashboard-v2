@@ -14,7 +14,7 @@ const PORT = Number(process.env.PORT || 3000);
 const sensorMap = {
     'sensor-cong_suat_pv': 'pv',
     'sensor-cong_suat_tai': 'load',
-    'sensor-can_bang_cong_suat': 'bat',
+    'sensor-can_bang_cong_suat': 'balancePower',
     'sensor-cong_suat_luoi': 'grid',
     'sensor-dien_ap_pv': 'pvVoltage',
     'sensor-dong_pv': 'pvCurrent',
@@ -161,6 +161,16 @@ function applySensorValue(key, id, numericValue) {
         return;
     }
 
+    if (key === 'jkPower') {
+        realData.jkPower = numericValue;
+        realData.bat = numericValue;
+        return;
+    }
+
+    if (key === 'balancePower') {
+        return;
+    }
+
     realData[key] = numericValue;
 }
 
@@ -180,9 +190,25 @@ function setLatestNumber(rows, key, column) {
     return false;
 }
 
+function latestNumber(rows, column) {
+    for (const row of rows) {
+        const numericValue = row[column] === null || row[column] === undefined ? null : Number(row[column]);
+        if (Number.isFinite(numericValue)) return numericValue;
+    }
+    return null;
+}
+
 function rowNumber(row, column) {
     const numericValue = row && row[column] !== null && row[column] !== undefined ? Number(row[column]) : null;
     return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function effectiveBatteryPower(fallback = null) {
+    if (Number.isFinite(realData.jkPower)) return realData.jkPower;
+    if (Number.isFinite(realData.jkCurrent) && Number.isFinite(realData.battVoltage)) {
+        return realData.jkCurrent * realData.battVoltage;
+    }
+    return Number.isFinite(fallback) ? fallback : realData.bat;
 }
 
 function localDateParts(timestamp) {
@@ -284,13 +310,14 @@ async function seedLatestFromSupabase() {
 
         setLatestNumber(rows, 'pv', 'pv_w');
         setLatestNumber(rows, 'load', 'load_w');
-        setLatestNumber(rows, 'bat', 'battery_w');
+        const storedBatteryW = latestNumber(rows, 'battery_w');
         setLatestNumber(rows, 'grid', 'grid_w');
         setLatestNumber(rows, 'soc', 'soc_percent');
         setLatestNumber(rows, 'battVoltage', 'battery_voltage_v');
         setLatestNumber(rows, 'pvVoltage', 'pv_voltage_v');
         setLatestNumber(rows, 'pvCurrent', 'pv_current_a');
         setLatestNumber(rows, 'jkCurrent', 'jk_current_a');
+        realData.bat = effectiveBatteryPower(storedBatteryW);
         setLatestNumber(rows, 'invTemp', 'inverter_temp_c');
         setLatestNumber(rows, 'tempMos', 'mos_temp_c');
         setLatestNumber(rows, 'outputVoltage', 'output_voltage_v');
@@ -328,11 +355,12 @@ function hasRealtimeData() {
 
 function createHistorySample() {
     const ts = Math.floor(Date.now() / SAMPLE_INTERVAL_MS) * SAMPLE_INTERVAL_MS;
+    const batteryPower = effectiveBatteryPower();
     return {
         ts,
         pv: Number.isFinite(realData.pv) ? Math.round(realData.pv) : null,
         load: Number.isFinite(realData.load) ? Math.round(realData.load) : null,
-        bat: Number.isFinite(realData.bat) ? Math.round(realData.bat) : null,
+        bat: Number.isFinite(batteryPower) ? Math.round(batteryPower) : null,
         grid: Number.isFinite(realData.grid) ? Math.round(realData.grid) : null,
         soc: numberOrNull(realData.soc, 1),
         voltage: numberOrNull(realData.battVoltage, 1),

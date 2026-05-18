@@ -69,7 +69,7 @@ const keyToColumn = {
 const exactMap = {
     'sensor.nangluongmattroi_cong_suat_pv': 'pv',
     'sensor.nangluongmattroi_cong_suat_tai': 'load',
-    'sensor.nangluongmattroi_can_bang_cong_suat': 'bat',
+    'sensor.nangluongmattroi_can_bang_cong_suat': 'balancePower',
     'sensor.nangluongmattroi_jk_cong_suat_pin': 'jkPower',
     'sensor.nangluongmattroi_cong_suat_luoi': 'grid',
     'sensor.nangluongmattroi_dien_ap_pv': 'pvVoltage',
@@ -108,7 +108,7 @@ function resolveKey(state) {
     const text = normalize(`${state.entity_id} ${state.attributes?.friendly_name || ''}`);
     if (text.includes('cong_suat_pv') || text.includes('pv_power')) return 'pv';
     if (text.includes('cong_suat_tai') || text.includes('load_power')) return 'load';
-    if (text.includes('can_bang_cong_suat')) return 'bat';
+    if (text.includes('can_bang_cong_suat')) return 'balancePower';
     if (text.includes('jk_cong_suat_pin')) return 'jkPower';
     if (text.includes('cong_suat_luoi') || text.includes('grid_power')) return 'grid';
     if (text.includes('dien_ap_pv') || text.includes('pv_voltage')) return 'pvVoltage';
@@ -138,7 +138,7 @@ function scoreState(state, key) {
     let score = exactMap[id] === key ? 100 : 0;
     if (id.includes('nangluongmattroi')) score += 20;
     if (['dailyCharge', 'dailyDischarge', 'dailyPv', 'monthCharge', 'monthDischarge', 'monthPv'].includes(key) && unit.includes('kwh')) score += 30;
-    if (['pv', 'load', 'bat', 'jkPower', 'grid'].includes(key) && unit === 'w') score += 30;
+    if (['pv', 'load', 'bat', 'jkPower', 'grid', 'balancePower'].includes(key) && unit === 'w') score += 30;
     if (['soc', 'loadPercent'].includes(key) && unit === '%') score += 20;
     if (['battVoltage', 'pvVoltage', 'outputVoltage'].includes(key) && unit === 'v') score += 20;
     if (['pvCurrent', 'jkCurrent'].includes(key) && unit === 'a') score += 20;
@@ -212,8 +212,9 @@ for (const candidate of candidates) {
 }
 
 const keyPriority = {
-    bat: 100,
-    jkPower: 50
+    jkPower: 100,
+    bat: 80,
+    balancePower: 10
 };
 
 const byColumn = new Map();
