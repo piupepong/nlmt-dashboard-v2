@@ -1,19 +1,24 @@
-// Dashboard only reads Supabase. Armbian worker is responsible for collecting
-// ESPHome data and writing samples to the database.
+// Dashboard reads Supabase for history and can read ESPHome SSE directly for live UI.
+// Armbian worker remains responsible for writing samples to the database.
 const SUPABASE_CONFIG = window.SUPABASE_CONFIG || {};
 const SUPABASE_TABLE = SUPABASE_CONFIG.table || 'energy_samples';
 const DEVICE_ID = SUPABASE_CONFIG.deviceId || 'nlmt-main';
+const ESPHOME_EVENT_URL = SUPABASE_CONFIG.esphomeEventUrl || window.ESPHOME_EVENT_URL || '';
 const THEME_STORAGE_KEY = 'nlmt-theme-v1';
 const THEME_AUTO_STORAGE_KEY = 'nlmt-theme-auto-v1';
 let supabaseClient = null;
 let supabaseReady = false;
 let isLoadingRemoteHistory = false;
 let espConnected = false;
+let esphomeRealtimeConnected = false;
+let esphomeEventSource = null;
+let esphomeUiFrame = null;
 let lastEventAt = null;
 let lastSupabaseSyncAt = null;
 let supabaseStatus = 'disabled';
 let supabaseRealtimeChannel = null;
 let selectedRangePreset = '24h';
+const tempMosSources = {};
 
 let realData = {
     pv: null, load: null, grid: null, bat: null,
@@ -209,7 +214,8 @@ function setStatusDot(id, state) {
 
 function updateSystemStatus() {
     setStatusDot('espStatusDot', espConnected ? 'ok' : 'bad');
-    setText('espStatusText', espConnected ? `Online - ${formatClock(lastEventAt)}` : 'Mất kết nối');
+    const dataSource = esphomeRealtimeConnected ? 'ESPHome realtime' : 'Supabase realtime';
+    setText('espStatusText', espConnected ? `${dataSource} - ${formatClock(lastEventAt)}` : 'Mất kết nối');
 
     if (supabaseStatus === 'ok') {
         setStatusDot('supabaseStatusDot', 'ok');
@@ -397,6 +403,111 @@ function resolveSensorKey(id) {
         if (normalized.includes('pv') || normalized.includes('solar')) return 'monthPv';
     }
     return null;
+}
+
+function refreshBatteryPowerFromJk() {
+    if (Number.isFinite(realData.jkPower)) {
+        realData.bat = realData.jkPower;
+        return;
+    }
+    if (Number.isFinite(realData.jkCurrent) && Number.isFinite(realData.battVoltage)) {
+        realData.bat = realData.jkCurrent * realData.battVoltage;
+    }
+}
+
+function applyEsphomeSensorValue(key, id, numericValue) {
+    if (!Number.isFinite(numericValue)) return false;
+
+    if (key === 'balancePower') return false;
+
+    if (key === 'tempMos') {
+        tempMosSources[normalizeSensorId(id)] = numericValue;
+        const values = Object.values(tempMosSources).filter(Number.isFinite);
+        realData.tempMos = values.length ? Math.max(...values) : numericValue;
+        return true;
+    }
+
+    if (key === 'jkPower') {
+        realData.jkPower = numericValue;
+        realData.bat = numericValue;
+        return true;
+    }
+
+    realData[key] = numericValue;
+    if (key === 'jkCurrent' || key === 'battVoltage') refreshBatteryPowerFromJk();
+    return true;
+}
+
+function updatePowerMixOnly() {
+    if (!powerMixChart) return;
+    powerMixChart.data.datasets[0].data = [
+        valueOrZero(realData.pv),
+        valueOrZero(realData.load),
+        Math.abs(valueOrZero(realData.bat)),
+        Math.abs(valueOrZero(realData.grid))
+    ];
+    powerMixChart.update('none');
+}
+
+function scheduleEsphomeRealtimeUi() {
+    if (esphomeUiFrame) return;
+    esphomeUiFrame = requestAnimationFrame(() => {
+        esphomeUiFrame = null;
+        updateFloatingCards();
+        updateOtherUI();
+        updateOperationMonitor();
+        updatePowerMixOnly();
+        updateSystemStatus();
+    });
+}
+
+function handleEsphomeEventData(data) {
+    try {
+        const event = JSON.parse(data);
+        const id = event.id || event.entity_id;
+        const key = resolveSensorKey(id);
+        if (!key) return;
+
+        const raw = event.value !== undefined ? event.value : (event.state === 'ON' ? 1 : event.state);
+        const numericValue = parseFloat(raw);
+        if (!applyEsphomeSensorValue(key, id, numericValue)) return;
+
+        espConnected = true;
+        esphomeRealtimeConnected = true;
+        lastEventAt = Date.now();
+        scheduleEsphomeRealtimeUi();
+    } catch (err) {
+        console.warn('Bad ESPHome SSE event:', err.message);
+    }
+}
+
+function canOpenDirectEsphome(url) {
+    if (!url || typeof EventSource === 'undefined') return false;
+    try {
+        const parsed = new URL(url, window.location.href);
+        return !(window.location.protocol === 'https:' && parsed.protocol === 'http:');
+    } catch (err) {
+        console.warn('Invalid ESPHome event URL:', url);
+        return false;
+    }
+}
+
+function connectEsphomeRealtime() {
+    if (!canOpenDirectEsphome(ESPHOME_EVENT_URL) || esphomeEventSource) return;
+
+    esphomeEventSource = new EventSource(ESPHOME_EVENT_URL);
+    esphomeEventSource.addEventListener('open', () => {
+        esphomeRealtimeConnected = true;
+        espConnected = true;
+        lastEventAt = Date.now();
+        updateSystemStatus();
+    });
+    esphomeEventSource.addEventListener('state', event => handleEsphomeEventData(event.data));
+    esphomeEventSource.addEventListener('message', event => handleEsphomeEventData(event.data));
+    esphomeEventSource.addEventListener('error', () => {
+        esphomeRealtimeConnected = false;
+        updateSystemStatus();
+    });
 }
 
 // ========== 1. CẬP NHẬT THẺ NỔI ==========
@@ -895,22 +1006,25 @@ function applyRowNumber(key, value) {
 }
 
 function applyRealtimeRow(row) {
-    applyRowNumber('pv', row.pv_w);
-    applyRowNumber('load', row.load_w);
-    applyRowNumber('bat', rowBatteryPower(row));
-    applyRowNumber('grid', row.grid_w);
-    applyRowNumber('soc', row.soc_percent);
-    applyRowNumber('battVoltage', row.battery_voltage_v);
-    applyRowNumber('pvVoltage', row.pv_voltage_v);
-    applyRowNumber('pvCurrent', row.pv_current_a);
-    applyRowNumber('jkCurrent', row.jk_current_a);
-    applyRowNumber('invTemp', row.inverter_temp_c);
-    applyRowNumber('tempMos', row.mos_temp_c);
-    applyRowNumber('outputVoltage', row.output_voltage_v);
-    applyRowNumber('freq', row.output_frequency_hz);
-    applyRowNumber('apparent', row.apparent_va);
-    applyRowNumber('loadPercent', row.load_percent);
-    applyRowNumber('cellDiff', row.cell_diff_v);
+    const directIsFresh = esphomeRealtimeConnected && lastEventAt && Date.now() - lastEventAt < 15000;
+    if (!directIsFresh) {
+        applyRowNumber('pv', row.pv_w);
+        applyRowNumber('load', row.load_w);
+        applyRowNumber('bat', rowBatteryPower(row));
+        applyRowNumber('grid', row.grid_w);
+        applyRowNumber('soc', row.soc_percent);
+        applyRowNumber('battVoltage', row.battery_voltage_v);
+        applyRowNumber('pvVoltage', row.pv_voltage_v);
+        applyRowNumber('pvCurrent', row.pv_current_a);
+        applyRowNumber('jkCurrent', row.jk_current_a);
+        applyRowNumber('invTemp', row.inverter_temp_c);
+        applyRowNumber('tempMos', row.mos_temp_c);
+        applyRowNumber('outputVoltage', row.output_voltage_v);
+        applyRowNumber('freq', row.output_frequency_hz);
+        applyRowNumber('apparent', row.apparent_va);
+        applyRowNumber('loadPercent', row.load_percent);
+        applyRowNumber('cellDiff', row.cell_diff_v);
+    }
     applyRowNumber('dailyCharge', row.daily_charge_kwh);
     applyRowNumber('dailyDischarge', row.daily_discharge_kwh);
     applyRowNumber('dailyPv', row.daily_pv_kwh);
@@ -933,7 +1047,7 @@ function applyRealtimeRow(row) {
     applyEstimatedProduction(historySamples);
 
     espConnected = true;
-    lastEventAt = Number.isFinite(sample.ts) ? sample.ts : Date.now();
+    if (!directIsFresh) lastEventAt = Number.isFinite(sample.ts) ? sample.ts : Date.now();
     lastSupabaseSyncAt = Date.now();
     supabaseStatus = 'ok';
 
@@ -1531,12 +1645,16 @@ updateOtherUI();
 updateOperationMonitor();
 updateInsights();
 updateSystemStatus();
+connectEsphomeRealtime();
 loadHistoryFromSupabase();
 loadLatestFromSupabase();
 loadProductionFromSupabase();
 subscribeSupabaseRealtime();
 setInterval(() => {
-    if (lastEventAt && Date.now() - lastEventAt > 90000) espConnected = false;
+    if (lastEventAt && Date.now() - lastEventAt > 90000) {
+        espConnected = false;
+        esphomeRealtimeConnected = false;
+    }
     updateSystemStatus();
 }, 15000);
 setInterval(loadLatestFromSupabase, 60000);
