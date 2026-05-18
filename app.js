@@ -499,7 +499,7 @@ let pulse = 0;
 function resizeFlow() {
     const container = canvas.parentElement;
     width = container.clientWidth;
-    height = window.innerWidth <= 860 ? 520 : 330;
+    height = window.innerWidth <= 860 ? 520 : 300;
     if (window.innerWidth <= 560) height = 540;
     canvas.width = width;
     canvas.height = height;
@@ -519,11 +519,11 @@ function updateNodeCoords() {
         };
     } else {
         nodes = {
-            pv: {x: width * 0.14, y: height * 0.35, label: 'PV', color: '#f5b64a'},
-            grid: {x: width * 0.86, y: height * 0.35, label: 'Bù lưới', color: '#8db5ff'},
-            load: {x: width * 0.25, y: height * 0.72, label: 'Tải', color: '#78dce3'},
-            battery: {x: width * 0.75, y: height * 0.72, label: 'Pin', color: '#78c9b5'},
-            inverter: {x: width * 0.5, y: height * 0.45, label: 'Inverter', color: '#ffffff'}
+            pv: {x: width * 0.15, y: height * 0.34, label: 'PV', color: '#f5b64a'},
+            grid: {x: width * 0.86, y: height * 0.34, label: 'Bù lưới', color: '#8db5ff'},
+            load: {x: width * 0.26, y: height * 0.72, label: 'Tải', color: '#78dce3'},
+            battery: {x: width * 0.76, y: height * 0.72, label: 'Pin', color: '#78c9b5'},
+            inverter: {x: width * 0.51, y: height * 0.46, label: 'Inverter', color: '#ffffff'}
         };
     }
 }
@@ -549,12 +549,12 @@ function repositionCards() {
 }
 
 const flowLinks = [
-    {from:'pv', to:'inverter', key:'pv', color:'#f5b64a', liftDesktop:-80, liftMobile:-42},
-    {from:'inverter', to:'load', key:'load', color:'#78dce3', liftDesktop:-80, liftMobile:-42},
-    {from:'inverter', to:'battery', key:'batCharge', color:'#78c9b5', liftDesktop:70, liftMobile:42},
-    {from:'battery', to:'inverter', key:'batDischarge', color:'#78c9b5', liftDesktop:70, liftMobile:42},
-    {from:'grid', to:'inverter', key:'gridOffset', color:'#8db5ff', liftDesktop:-24, liftMobile:-42},
-    {from:'inverter', to:'grid', key:'gridSurplus', color:'#f5b64a', liftDesktop:-24, liftMobile:-42}
+    {from:'pv', to:'inverter', key:'pv', color:'#f5b64a', liftDesktop:-62, liftMobile:-42},
+    {from:'inverter', to:'load', key:'load', color:'#78dce3', liftDesktop:-58, liftMobile:-42},
+    {from:'inverter', to:'battery', key:'batCharge', color:'#78c9b5', liftDesktop:54, liftMobile:42},
+    {from:'battery', to:'inverter', key:'batDischarge', color:'#78c9b5', liftDesktop:54, liftMobile:42},
+    {from:'grid', to:'inverter', key:'gridOffset', color:'#8db5ff', liftDesktop:-18, liftMobile:-42},
+    {from:'inverter', to:'grid', key:'gridSurplus', color:'#f5b64a', liftDesktop:-18, liftMobile:-42}
 ];
 
 function linkLift(link) {
