@@ -517,7 +517,7 @@ let pulse = 0;
 function resizeFlow() {
     const container = canvas.parentElement;
     width = container.clientWidth;
-    const fallbackHeight = window.innerWidth <= 560 ? 760 : window.innerWidth <= 860 ? 720 : 360;
+    const fallbackHeight = window.innerWidth <= 560 ? 860 : window.innerWidth <= 860 ? 820 : 560;
     height = container.clientHeight || fallbackHeight;
     canvas.width = width;
     canvas.height = height;
@@ -529,11 +529,11 @@ window.addEventListener('resize', resizeFlow);
 function updateNodeCoords() {
     if (width <= 620) {
         nodes = {
-            pv: {x: width * 0.23, y: height * 0.16, label: 'PV', color: '#f5b64a'},
-            grid: {x: width * 0.77, y: height * 0.16, label: 'Bù lưới', color: '#8db5ff'},
-            inverter: {x: width * 0.5, y: height * 0.45, label: 'Inverter', color: '#ffffff'},
-            load: {x: width * 0.23, y: height * 0.72, label: 'Tải', color: '#78dce3'},
-            battery: {x: width * 0.77, y: height * 0.82, label: 'Pin', color: '#78c9b5'}
+            pv: {x: width * 0.24, y: height * 0.14, label: 'PV', color: '#f5b64a'},
+            grid: {x: width * 0.76, y: height * 0.14, label: 'Bù lưới', color: '#8db5ff'},
+            inverter: {x: width * 0.5, y: height * 0.42, label: 'Inverter', color: '#ffffff'},
+            load: {x: width * 0.24, y: height * 0.68, label: 'Tải', color: '#78dce3'},
+            battery: {x: width * 0.76, y: height * 0.86, label: 'Pin', color: '#78c9b5'}
         };
     } else {
         nodes = {
@@ -549,8 +549,8 @@ function updateNodeCoords() {
 function placeCard(id, x, y) {
     const card = document.getElementById(id);
     if (!card) return;
-    const cardWidth = card.offsetWidth || (width <= 620 ? 160 : 168);
-    const cardHeight = card.offsetHeight || (width <= 620 ? 122 : 170);
+    const cardWidth = card.offsetWidth || (width <= 620 ? 146 : 168);
+    const cardHeight = card.offsetHeight || (width <= 620 ? 128 : 170);
     const margin = width <= 620 ? 12 : 18;
     const left = Math.max(margin, Math.min(width - cardWidth - margin, x - cardWidth / 2));
     const top = Math.max(margin, Math.min(height - cardHeight - margin, y - cardHeight / 2));

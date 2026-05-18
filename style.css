@@ -349,7 +349,7 @@ h2 i,
     display: grid;
     grid-template-columns: minmax(0, 1.46fr) minmax(380px, 0.54fr);
     gap: 14px;
-    align-items: start;
+    align-items: stretch;
 }
 
 .command-sidebar {
@@ -358,14 +358,18 @@ h2 i,
 }
 
 .topology-panel {
+    display: flex;
+    flex-direction: column;
     min-width: 0;
+    min-height: max(650px, calc(100vh - 156px));
 }
 
 .flow-canvas-wrap {
+    flex: 1 1 auto;
     position: relative;
     width: 100%;
-    height: clamp(430px, 31vw, 560px);
-    min-height: 430px;
+    height: auto;
+    min-height: 560px;
     overflow: hidden;
     border: 1px solid rgba(129, 232, 215, 0.22);
     border-radius: 20px;
@@ -912,6 +916,14 @@ footer {
         align-items: end;
         flex-wrap: wrap;
     }
+
+    .topology-panel {
+        min-height: 620px;
+    }
+
+    .flow-canvas-wrap {
+        min-height: 540px;
+    }
 }
 
 @media (max-width: 1120px) {
@@ -929,6 +941,10 @@ footer {
 
     .inverter-card .stat-item:last-child {
         grid-column: span 2;
+    }
+
+    .fc-data-grid {
+        display: none;
     }
 }
 
@@ -976,8 +992,8 @@ footer {
     }
 
     .flow-canvas-wrap {
-        height: 720px;
-        min-height: 720px;
+        height: 820px;
+        min-height: 820px;
         border-radius: 24px;
         background:
             radial-gradient(circle at 22% 16%, rgba(255, 200, 87, 0.18), transparent 24%),
@@ -996,8 +1012,8 @@ footer {
     }
 
     .floating-card {
-        width: clamp(150px, 42vw, 172px);
-        min-width: 150px;
+        width: clamp(138px, 40vw, 164px);
+        min-width: 138px;
         padding: 13px 12px;
         border-radius: 22px;
         text-align: left;
@@ -1009,7 +1025,7 @@ footer {
 
     .fc-main {
         margin-top: 12px;
-        font-size: 1.76rem;
+        font-size: 1.82rem;
         line-height: 0.98;
     }
 
@@ -1067,16 +1083,16 @@ footer {
     }
 
     .flow-canvas-wrap {
-        height: 760px;
-        min-height: 760px;
+        height: 860px;
+        min-height: 860px;
     }
 
     .floating-card {
-        width: clamp(148px, 43vw, 166px);
-        min-width: 148px;
+        width: clamp(134px, 40vw, 154px);
+        min-width: 134px;
     }
 
     .fc-main {
-        font-size: 1.62rem;
+        font-size: 1.66rem;
     }
 }
