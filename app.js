@@ -401,55 +401,73 @@ function resolveSensorKey(id) {
 
 // ========== 1. CẬP NHẬT THẺ NỔI ==========
 function updateFloatingCards() {
+    const pvLoadRatio = Number.isFinite(realData.pv) && Number.isFinite(realData.load) && realData.load > 0
+        ? realData.pv / realData.load * 100
+        : null;
+    const gridEnergy = estimateGridEnergy(getChartHistory());
+    const soc = Number.isFinite(realData.soc) ? Math.max(0, Math.min(100, realData.soc)) : 0;
+
     setText('pvPowerFloat', formatValue(realData.pv));
     setText('pvVoltageFloat', formatValue(realData.pvVoltage, 1));
     setText('pvCurrentFloat', formatValue(realData.pvCurrent, 1));
+    setText('pvLoadRatioFloat', Number.isFinite(pvLoadRatio) ? `${formatValue(pvLoadRatio)}%` : '--%');
+    setText('pvDailyFloat', formatValue(productionValue('dailyPv'), 2));
     setText('loadPowerFloat', formatValue(realData.load));
     setText('loadPercentFloat', formatValue(realData.loadPercent));
+    setText('loadApparentFloat', formatValue(realData.apparent));
+    setText('loadOutputFloat', Number.isFinite(realData.outputVoltage) ? `${formatValue(realData.outputVoltage, 1)} V` : '-- V');
     setText('pvMetaFloat', Number.isFinite(realData.pv) && realData.pv > 20 ? 'Đang phát' : 'Chờ nắng');
     setText('loadMetaFloat', Number.isFinite(realData.apparent) ? `${formatValue(realData.apparent)} VA` : 'Theo tải');
 
     let gridPower = valueOrZero(realData.grid);
     let gridSpan = document.getElementById('gridPowerFloat');
     let gridDirSpan = document.getElementById('gridDirectionFloat');
-    gridSpan.innerText = Number.isFinite(realData.grid) ? Math.abs(Math.round(gridPower)) : '--';
+    if (gridSpan) gridSpan.innerText = Number.isFinite(realData.grid) ? Math.abs(Math.round(gridPower)) : '--';
     if (!Number.isFinite(realData.grid)) {
-        gridSpan.style.color = '#fff2cf';
-        gridDirSpan.innerHTML = 'Chờ dữ liệu';
+        if (gridSpan) gridSpan.style.color = '#fff2cf';
+        if (gridDirSpan) gridDirSpan.innerHTML = 'Chờ dữ liệu';
     } else if (gridPower > 0) {
-        gridSpan.style.color = '#8db5ff';
-        gridDirSpan.innerHTML = '⚡ Bù lưới';
+        if (gridSpan) gridSpan.style.color = '#8db5ff';
+        if (gridDirSpan) gridDirSpan.innerHTML = '⚡ Bù lưới';
     } else if (gridPower < 0) {
-        gridSpan.style.color = '#e67e22';
-        gridDirSpan.innerHTML = 'Dư lưới';
+        if (gridSpan) gridSpan.style.color = '#e67e22';
+        if (gridDirSpan) gridDirSpan.innerHTML = 'Dư lưới';
     } else {
-        gridSpan.style.color = '#fff2cf';
-        gridDirSpan.innerHTML = '⚡ Độc lập';
+        if (gridSpan) gridSpan.style.color = '#fff2cf';
+        if (gridDirSpan) gridDirSpan.innerHTML = '⚡ Độc lập';
     }
+    setText('gridVoltageFloat', formatValue(realData.gridVoltage, 1));
+    setText('gridDailyFloat', Number.isFinite(gridEnergy.offsetKwh) ? gridEnergy.offsetKwh.toFixed(2) : '--');
     setText('gridMetaFloat', `${formatValue(realData.gridVoltage, 1)} V`);
 
     let battAbs = Math.abs(valueOrZero(realData.bat));
     setText('battPowerFloat', Number.isFinite(realData.bat) ? Math.round(battAbs) : '--');
     setHtml('battSOCFloat', `SOC ${formatValue(realData.soc)}%`);
+    const battSocFill = document.getElementById('battSocMiniFill');
+    if (battSocFill) battSocFill.style.width = `${soc}%`;
+    setText('battCurrentFloat', formatValue(realData.jkCurrent, 1));
+    setText('battMosFloat', formatValue(realData.tempMos, 1));
     let arrowSpan = document.getElementById('battArrowFloat');
     if (!Number.isFinite(realData.bat)) {
-        arrowSpan.innerHTML = 'Chờ dữ liệu';
-        arrowSpan.style.color = '#cfe6df';
+        if (arrowSpan) arrowSpan.innerHTML = 'Chờ dữ liệu';
+        if (arrowSpan) arrowSpan.style.color = '#cfe6df';
     } else if (realData.bat > 15) {
-        arrowSpan.innerHTML = '⬆️ Sạc';
-        arrowSpan.style.color = '#2ecc71';
+        if (arrowSpan) arrowSpan.innerHTML = '⬆️ Sạc';
+        if (arrowSpan) arrowSpan.style.color = '#2ecc71';
     } else if (realData.bat < -15) {
-        arrowSpan.innerHTML = '⬇️ Xả';
-        arrowSpan.style.color = '#e67e22';
+        if (arrowSpan) arrowSpan.innerHTML = '⬇️ Xả';
+        if (arrowSpan) arrowSpan.style.color = '#e67e22';
     } else {
-        arrowSpan.innerHTML = '⚖️ Cân bằng';
-        arrowSpan.style.color = '#ccc';
+        if (arrowSpan) arrowSpan.innerHTML = '⚖️ Cân bằng';
+        if (arrowSpan) arrowSpan.style.color = '#ccc';
     }
     setText('battMetaFloat', `${formatValue(realData.battVoltage, 1)} V`);
 
     setText('invTempFloat', formatValue(realData.invTemp, 1));
     setText('invFreqFloat', formatValue(realData.freq, 1));
     setText('invOutputFloat', formatValue(realData.outputVoltage, 1));
+    setText('invLoadMiniFloat', formatValue(realData.loadPercent));
+    setText('invPvMiniFloat', formatValue(realData.pv));
     setText('invMetaFloat', Number.isFinite(realData.loadPercent) ? `Tải ${formatValue(realData.loadPercent)}%` : 'Nhiệt độ');
 }
 
@@ -531,10 +549,11 @@ function updateNodeCoords() {
 function placeCard(id, x, y) {
     const card = document.getElementById(id);
     if (!card) return;
-    const cardWidth = card.offsetWidth || (width <= 620 ? 100 : 128);
-    const cardHeight = card.offsetHeight || 88;
-    const left = Math.max(8, Math.min(width - cardWidth - 8, x - cardWidth / 2));
-    const top = Math.max(8, Math.min(height - cardHeight - 8, y - cardHeight / 2));
+    const cardWidth = card.offsetWidth || (width <= 620 ? 142 : 168);
+    const cardHeight = card.offsetHeight || (width <= 620 ? 150 : 170);
+    const margin = width <= 620 ? 10 : 18;
+    const left = Math.max(margin, Math.min(width - cardWidth - margin, x - cardWidth / 2));
+    const top = Math.max(margin, Math.min(height - cardHeight - margin, y - cardHeight / 2));
     card.style.left = `${left}px`;
     card.style.top = `${top}px`;
 }
@@ -611,7 +630,7 @@ function drawCurve(link, active) {
 }
 
 function drawNode(node, active) {
-    const radius = active ? 26 + Math.sin(pulse) * 2 : 21;
+    const radius = active ? 34 + Math.sin(pulse) * 3 : 28;
     const glow = ctx.createRadialGradient(node.x, node.y, 4, node.x, node.y, radius * 2.4);
     glow.addColorStop(0, active ? node.color : 'rgba(255,255,255,0.72)');
     glow.addColorStop(0.38, active ? `${node.color}55` : 'rgba(255,255,255,0.18)');
@@ -623,8 +642,8 @@ function drawNode(node, active) {
     ctx.fill();
 
     ctx.shadowColor = active ? node.color : 'rgba(255,255,255,0.5)';
-    ctx.shadowBlur = active ? 20 : 8;
-    ctx.fillStyle = active ? 'rgba(255,255,255,0.52)' : 'rgba(255,255,255,0.32)';
+    ctx.shadowBlur = active ? 26 : 10;
+    ctx.fillStyle = active ? 'rgba(255,255,255,0.58)' : 'rgba(255,255,255,0.34)';
     ctx.strokeStyle = 'rgba(255,255,255,0.74)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();

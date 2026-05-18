@@ -76,6 +76,10 @@
                     <div class="fc-top"><span class="fc-icon"><i class="fas fa-sun"></i></span><span class="fc-title">PV</span></div>
                     <div class="fc-main"><span id="pvPowerFloat">0</span><span class="unit">W</span></div>
                     <div class="fc-sub"><span id="pvVoltageFloat">0</span> V · <span id="pvCurrentFloat">0</span> A</div>
+                    <div class="fc-data-grid">
+                        <div><span>So tải</span><strong id="pvLoadRatioFloat">--%</strong></div>
+                        <div><span>Hôm nay</span><strong><span id="pvDailyFloat">--</span> kWh</strong></div>
+                    </div>
                     <div class="fc-meta" id="pvMetaFloat">Chờ nắng</div>
                 </div>
 
@@ -83,6 +87,10 @@
                     <div class="fc-top"><span class="fc-icon"><i class="fas fa-house-chimney"></i></span><span class="fc-title">Tải</span></div>
                     <div class="fc-main"><span id="loadPowerFloat">0</span><span class="unit">W</span></div>
                     <div class="fc-sub"><span id="loadPercentFloat">0</span>% tải</div>
+                    <div class="fc-data-grid">
+                        <div><span>Biểu kiến</span><strong><span id="loadApparentFloat">--</span> VA</strong></div>
+                        <div><span>Output</span><strong id="loadOutputFloat">-- V</strong></div>
+                    </div>
                     <div class="fc-meta" id="loadMetaFloat">Đang theo dõi</div>
                 </div>
 
@@ -90,6 +98,10 @@
                     <div class="fc-top"><span class="fc-icon"><i class="fas fa-tower-broadcast"></i></span><span class="fc-title">Bù lưới</span></div>
                     <div class="fc-main"><span id="gridPowerFloat">0</span><span class="unit">W</span></div>
                     <div class="fc-sub" id="gridDirectionFloat">Độc lập</div>
+                    <div class="fc-data-grid">
+                        <div><span>Điện áp</span><strong><span id="gridVoltageFloat">--</span> V</strong></div>
+                        <div><span>Hôm nay</span><strong><span id="gridDailyFloat">--</span> kWh</strong></div>
+                    </div>
                     <div class="fc-meta" id="gridMetaFloat">0.0 V</div>
                 </div>
 
@@ -97,6 +109,11 @@
                     <div class="fc-top"><span class="fc-icon"><i class="fas fa-battery-three-quarters"></i></span><span class="fc-title">Pin</span></div>
                     <div class="fc-main"><span id="battPowerFloat">0</span><span class="unit">W</span></div>
                     <div class="fc-sub"><span id="battSOCFloat">SOC 0%</span> <span id="battArrowFloat">Cân bằng</span></div>
+                    <div class="fc-mini-bar"><span id="battSocMiniFill"></span></div>
+                    <div class="fc-data-grid">
+                        <div><span>Dòng JK</span><strong><span id="battCurrentFloat">--</span> A</strong></div>
+                        <div><span>MOS</span><strong><span id="battMosFloat">--</span> °C</strong></div>
+                    </div>
                     <div class="fc-meta" id="battMetaFloat">-- V</div>
                 </div>
 
@@ -104,6 +121,10 @@
                     <div class="fc-top"><span class="fc-icon"><i class="fas fa-microchip"></i></span><span class="fc-title">Inverter</span></div>
                     <div class="fc-main"><span id="invTempFloat">0</span> °C</div>
                     <div class="fc-sub"><span id="invFreqFloat">0</span> Hz · <span id="invOutputFloat">0</span> V</div>
+                    <div class="fc-data-grid">
+                        <div><span>Tải</span><strong><span id="invLoadMiniFloat">--</span>%</strong></div>
+                        <div><span>PV vào</span><strong><span id="invPvMiniFloat">--</span> W</strong></div>
+                    </div>
                     <div class="fc-meta" id="invMetaFloat">Nhiệt độ</div>
                 </div>
             </div>
