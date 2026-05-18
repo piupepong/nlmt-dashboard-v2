@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>NLMT Command Center V2</title>
+    <title>NLMT Operations Console</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="shortcut icon" href="assets/favicon.svg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -13,110 +13,146 @@
 </head>
 <body>
 <div class="app-container">
-    <div class="glass-card flow-integrated">
-        <h2><i class="fas fa-charging-station"></i> NLMT COMMAND CENTER</h2>
-        <div class="flow-canvas-wrap" id="flowWrap">
-            <canvas id="energyFlowCanvas" width="900" height="360"></canvas>
-            <div class="floating-card" id="cardPV">
-                <div class="fc-top"><span class="fc-icon"><i class="fas fa-sun"></i></span><span class="fc-title">PV</span></div>
-                <div class="fc-main"><span id="pvPowerFloat">0</span><span class="unit">W</span></div>
-                <div class="fc-sub"><span id="pvVoltageFloat">0</span> V · <span id="pvCurrentFloat">0</span> A</div>
-                <div class="fc-meta" id="pvMetaFloat">Chờ nắng</div>
-            </div>
-            <div class="floating-card" id="cardLoad">
-                <div class="fc-top"><span class="fc-icon"><i class="fas fa-house-chimney"></i></span><span class="fc-title">Tải</span></div>
-                <div class="fc-main"><span id="loadPowerFloat">0</span><span class="unit">W</span></div>
-                <div class="fc-sub"><span id="loadPercentFloat">0</span>% tải</div>
-                <div class="fc-meta" id="loadMetaFloat">Đang theo dõi</div>
-            </div>
-            <div class="floating-card" id="cardGrid">
-                <div class="fc-top"><span class="fc-icon"><i class="fas fa-tower-broadcast"></i></span><span class="fc-title">Bù lưới</span></div>
-                <div class="fc-main"><span id="gridPowerFloat">0</span><span class="unit">W</span></div>
-                <div class="fc-sub" id="gridDirectionFloat">⚡ độc lập</div>
-                <div class="fc-meta" id="gridMetaFloat">0.0 V</div>
-            </div>
-            <div class="floating-card" id="cardBatt">
-                <div class="fc-top"><span class="fc-icon"><i class="fas fa-battery-three-quarters"></i></span><span class="fc-title">Pin</span></div>
-                <div class="fc-main"><span id="battPowerFloat">0</span><span class="unit">W</span></div>
-                <div class="fc-sub"><span id="battSOCFloat">SOC 0%</span> <span id="battArrowFloat">⚖️</span></div>
-                <div class="fc-meta" id="battMetaFloat">-- V</div>
-            </div>
-            <div class="floating-card" id="cardInverter">
-                <div class="fc-top"><span class="fc-icon"><i class="fas fa-microchip"></i></span><span class="fc-title">Inverter</span></div>
-                <div class="fc-main"><span id="invTempFloat">0</span> °C</div>
-                <div class="fc-sub"><span id="invFreqFloat">0</span> Hz · <span id="invOutputFloat">0</span> V</div>
-                <div class="fc-meta" id="invMetaFloat">Nhiệt độ</div>
+    <header class="console-header glass-card">
+        <div class="brand-block">
+            <div class="brand-mark"><i class="fas fa-bolt"></i></div>
+            <div>
+                <div class="eyebrow">Solar Operations</div>
+                <h1>NLMT Operations Console</h1>
+                <p>Giám sát realtime từ Supabase, dữ liệu được ghi bởi worker Armbian.</p>
             </div>
         </div>
-    </div>
 
-    <div class="status-grid">
-        <div class="status-card" id="espStatusCard">
-            <div class="status-dot" id="espStatusDot"></div>
-            <div>
-                <div class="status-label">DỮ LIỆU</div>
-                <div class="status-value" id="espStatusText">Đang kết nối</div>
+        <div class="status-grid">
+            <div class="status-card" id="espStatusCard">
+                <div class="status-dot" id="espStatusDot"></div>
+                <div>
+                    <div class="status-label">Dữ liệu</div>
+                    <div class="status-value" id="espStatusText">Đang kết nối</div>
+                </div>
             </div>
-        </div>
-        <div class="status-card" id="supabaseStatusCard">
-            <div class="status-dot" id="supabaseStatusDot"></div>
-            <div>
-                <div class="status-label">SUPABASE</div>
-                <div class="status-value" id="supabaseStatusText">Chưa cấu hình</div>
+            <div class="status-card" id="supabaseStatusCard">
+                <div class="status-dot" id="supabaseStatusDot"></div>
+                <div>
+                    <div class="status-label">Supabase</div>
+                    <div class="status-value" id="supabaseStatusText">Chưa cấu hình</div>
+                </div>
             </div>
-        </div>
-        <div class="status-card">
-            <div class="status-dot neutral"></div>
-            <div>
-                <div class="status-label">MẪU GẦN NHẤT</div>
-                <div class="status-value" id="lastSampleText">--</div>
+            <div class="status-card">
+                <div class="status-dot neutral"></div>
+                <div>
+                    <div class="status-label">Mẫu gần nhất</div>
+                    <div class="status-value" id="lastSampleText">--</div>
+                </div>
             </div>
-        </div>
-        <div class="status-card theme-card">
-            <div class="status-dot neutral"></div>
-            <div class="theme-card-body">
-                <div class="status-label">GIAO DIỆN</div>
-                <div class="theme-controls" aria-label="Chọn giao diện">
-                    <button class="theme-option" id="themeLight" data-theme-choice="light" type="button">Sáng</button>
-                    <button class="theme-option" id="themeDark" data-theme-choice="dark" type="button">Tối</button>
-                    <label class="theme-auto"><input type="checkbox" id="themeAuto"> Auto tối</label>
+            <div class="status-card theme-card">
+                <div class="status-dot neutral"></div>
+                <div class="theme-card-body">
+                    <div class="status-label">Giao diện</div>
+                    <div class="theme-controls" aria-label="Chọn giao diện">
+                        <button class="theme-option" id="themeLight" data-theme-choice="light" type="button">Sáng</button>
+                        <button class="theme-option" id="themeDark" data-theme-choice="dark" type="button">Tối</button>
+                        <label class="theme-auto"><input type="checkbox" id="themeAuto"> Auto tối</label>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </header>
 
-    <div class="glass-card">
-        <h2><i class="fas fa-gauge-high"></i> HIỆU SUẤT & CẢNH BÁO</h2>
-        <div class="insight-grid">
-            <div class="insight-item"><div class="stat-label">Tự dùng PV</div><div class="stat-number"><span id="selfUseRate">--</span>%</div></div>
-            <div class="insight-item"><div class="stat-label">Tải đỉnh</div><div class="stat-number"><span id="peakLoad">--</span> W</div></div>
-            <div class="insight-item"><div class="stat-label">PV đỉnh</div><div class="stat-number"><span id="peakPv">--</span> W</div></div>
-            <div class="insight-item"><div class="stat-label">SOC thấp nhất</div><div class="stat-number"><span id="minSoc">--</span>%</div></div>
-            <div class="insight-item"><div class="stat-label">Nhiệt độ cao nhất</div><div class="stat-number"><span id="maxTemp">--</span> °C</div></div>
-            <div class="insight-item"><div class="stat-label">Bù lưới</div><div class="stat-number"><span id="gridImportKwh">--</span> kWh</div></div>
-            <div class="insight-item"><div class="stat-label">Dư lưới</div><div class="stat-number"><span id="gridExportKwh">--</span> kWh</div></div>
-            <div class="insight-item"><div class="stat-label">Bù ròng</div><div class="stat-number"><span id="gridOffsetKwh">--</span> kWh</div></div>
-        </div>
-        <div class="alert-list" id="alertList"></div>
-    </div>
+    <main class="operations-grid">
+        <section class="glass-card flow-integrated topology-panel">
+            <div class="section-head">
+                <div>
+                    <div class="eyebrow">Topology</div>
+                    <h2><i class="fas fa-diagram-project"></i> Luồng năng lượng realtime</h2>
+                </div>
+                <div class="panel-note">PV / tải / pin / bù lưới</div>
+            </div>
+            <div class="flow-canvas-wrap" id="flowWrap">
+                <canvas id="energyFlowCanvas" width="900" height="360"></canvas>
+                <div class="floating-card" id="cardPV">
+                    <div class="fc-top"><span class="fc-icon"><i class="fas fa-sun"></i></span><span class="fc-title">PV</span></div>
+                    <div class="fc-main"><span id="pvPowerFloat">0</span><span class="unit">W</span></div>
+                    <div class="fc-sub"><span id="pvVoltageFloat">0</span> V · <span id="pvCurrentFloat">0</span> A</div>
+                    <div class="fc-meta" id="pvMetaFloat">Chờ nắng</div>
+                </div>
+                <div class="floating-card" id="cardLoad">
+                    <div class="fc-top"><span class="fc-icon"><i class="fas fa-house-chimney"></i></span><span class="fc-title">Tải</span></div>
+                    <div class="fc-main"><span id="loadPowerFloat">0</span><span class="unit">W</span></div>
+                    <div class="fc-sub"><span id="loadPercentFloat">0</span>% tải</div>
+                    <div class="fc-meta" id="loadMetaFloat">Đang theo dõi</div>
+                </div>
+                <div class="floating-card" id="cardGrid">
+                    <div class="fc-top"><span class="fc-icon"><i class="fas fa-tower-broadcast"></i></span><span class="fc-title">Bù lưới</span></div>
+                    <div class="fc-main"><span id="gridPowerFloat">0</span><span class="unit">W</span></div>
+                    <div class="fc-sub" id="gridDirectionFloat">Độc lập</div>
+                    <div class="fc-meta" id="gridMetaFloat">0.0 V</div>
+                </div>
+                <div class="floating-card" id="cardBatt">
+                    <div class="fc-top"><span class="fc-icon"><i class="fas fa-battery-three-quarters"></i></span><span class="fc-title">Pin</span></div>
+                    <div class="fc-main"><span id="battPowerFloat">0</span><span class="unit">W</span></div>
+                    <div class="fc-sub"><span id="battSOCFloat">SOC 0%</span> <span id="battArrowFloat">Cân bằng</span></div>
+                    <div class="fc-meta" id="battMetaFloat">-- V</div>
+                </div>
+                <div class="floating-card" id="cardInverter">
+                    <div class="fc-top"><span class="fc-icon"><i class="fas fa-microchip"></i></span><span class="fc-title">Inverter</span></div>
+                    <div class="fc-main"><span id="invTempFloat">0</span> °C</div>
+                    <div class="fc-sub"><span id="invFreqFloat">0</span> Hz · <span id="invOutputFloat">0</span> V</div>
+                    <div class="fc-meta" id="invMetaFloat">Nhiệt độ</div>
+                </div>
+            </div>
+        </section>
 
-    <div class="glass-card operation-card">
-        <h2><i class="fas fa-clipboard-check"></i> THÔNG SỐ CẦN CHÚ Ý</h2>
-        <table class="data-table attention-table">
-            <thead><tr><th>Nhóm</th><th>Hiện tại</th><th>Trạng thái</th></tr></thead>
-            <tbody id="attentionTableBody">
-                <tr><td>PV / Tải</td><td>--</td><td>--</td></tr>
-                <tr><td>Pin</td><td>--</td><td>--</td></tr>
-                <tr><td>Inverter</td><td>--</td><td>--</td></tr>
-                <tr><td>AC Output</td><td>--</td><td>--</td></tr>
-            </tbody>
-        </table>
-    </div>
+        <aside class="right-stack">
+            <section class="glass-card insight-panel">
+                <div class="section-head">
+                    <div>
+                        <div class="eyebrow">Health</div>
+                        <h2><i class="fas fa-gauge-high"></i> Hiệu suất & cảnh báo</h2>
+                    </div>
+                </div>
+                <div class="insight-grid">
+                    <div class="insight-item"><div class="stat-label">Tự dùng PV</div><div class="stat-number"><span id="selfUseRate">--</span>%</div></div>
+                    <div class="insight-item"><div class="stat-label">Tải đỉnh</div><div class="stat-number"><span id="peakLoad">--</span> W</div></div>
+                    <div class="insight-item"><div class="stat-label">PV đỉnh</div><div class="stat-number"><span id="peakPv">--</span> W</div></div>
+                    <div class="insight-item"><div class="stat-label">SOC thấp nhất</div><div class="stat-number"><span id="minSoc">--</span>%</div></div>
+                    <div class="insight-item"><div class="stat-label">Nhiệt độ cao nhất</div><div class="stat-number"><span id="maxTemp">--</span> °C</div></div>
+                    <div class="insight-item"><div class="stat-label">Bù lưới</div><div class="stat-number"><span id="gridImportKwh">--</span> kWh</div></div>
+                    <div class="insight-item"><div class="stat-label">Dư lưới</div><div class="stat-number"><span id="gridExportKwh">--</span> kWh</div></div>
+                    <div class="insight-item"><div class="stat-label">Bù ròng</div><div class="stat-number"><span id="gridOffsetKwh">--</span> kWh</div></div>
+                </div>
+                <div class="alert-list" id="alertList"></div>
+            </section>
 
-    <div class="system-cards-grid">
-        <div class="glass-card">
-            <h2><i class="fas fa-battery-quarter"></i> PIN / BMS (JK)</h2>
-            <div class="stat-block">
+            <section class="glass-card operation-card">
+                <div class="section-head">
+                    <div>
+                        <div class="eyebrow">Watchlist</div>
+                        <h2><i class="fas fa-clipboard-check"></i> Thông số cần chú ý</h2>
+                    </div>
+                </div>
+                <table class="data-table attention-table">
+                    <thead><tr><th>Nhóm</th><th>Hiện tại</th><th>Trạng thái</th></tr></thead>
+                    <tbody id="attentionTableBody">
+                        <tr><td>PV / Tải</td><td>--</td><td>--</td></tr>
+                        <tr><td>Pin</td><td>--</td><td>--</td></tr>
+                        <tr><td>Inverter</td><td>--</td><td>--</td></tr>
+                        <tr><td>AC Output</td><td>--</td><td>--</td></tr>
+                    </tbody>
+                </table>
+            </section>
+        </aside>
+    </main>
+
+    <section class="subsystem-grid">
+        <div class="glass-card subsystem-card">
+            <div class="section-head">
+                <div>
+                    <div class="eyebrow">Storage</div>
+                    <h2><i class="fas fa-battery-quarter"></i> Pin / BMS JK</h2>
+                </div>
+            </div>
+            <div class="stat-block battery-block">
                 <div class="stat-item soc-stat">
                     <div class="stat-label">SOC</div>
                     <div class="battery-soc" id="socBattery" aria-label="SOC pin">
@@ -135,8 +171,14 @@
                 <div class="stat-item"><div class="stat-label">Lệch cell</div><div class="stat-number"><span id="lechAp">0</span> V</div></div>
             </div>
         </div>
-        <div class="glass-card">
-            <h2><i class="fas fa-microchip"></i> THÔNG SỐ INVERTER</h2>
+
+        <div class="glass-card subsystem-card">
+            <div class="section-head">
+                <div>
+                    <div class="eyebrow">Conversion</div>
+                    <h2><i class="fas fa-microchip"></i> Inverter</h2>
+                </div>
+            </div>
             <div class="stat-block">
                 <div class="stat-item"><div class="stat-label">Công suất PV</div><div class="stat-number"><span id="invPv">0</span> W</div></div>
                 <div class="stat-item"><div class="stat-label">Điện áp PV</div><div class="stat-number"><span id="invPvV">0</span> V</div></div>
@@ -147,26 +189,34 @@
                 <div class="stat-item"><div class="stat-label">Nhiệt độ Inv</div><div class="stat-number"><span id="invTemp">0</span> °C</div></div>
             </div>
         </div>
-        <div class="glass-card">
-            <h2><i class="fas fa-chart-simple"></i> SẢN LƯỢNG HÔM NAY & THÁNG NÀY</h2>
+
+        <div class="glass-card subsystem-card production-card">
+            <div class="section-head">
+                <div>
+                    <div class="eyebrow">Yield</div>
+                    <h2><i class="fas fa-chart-simple"></i> Sản lượng</h2>
+                </div>
+            </div>
             <div class="stat-block">
-                <div class="stat-item"><div class="stat-label">🔋 Pin sạc hôm nay</div><div class="stat-number"><span id="dailyCharge">0</span> kWh</div></div>
-                <div class="stat-item"><div class="stat-label">🔋 Pin xả hôm nay</div><div class="stat-number"><span id="dailyDischarge">0</span> kWh</div></div>
-                <div class="stat-item"><div class="stat-label">☀️ PV hôm nay</div><div class="stat-number"><span id="dailyPv">0</span> kWh</div></div>
-                <div class="stat-item"><div class="stat-label">📆 Pin sạc tháng</div><div class="stat-number"><span id="monthCharge">0</span> kWh</div></div>
-                <div class="stat-item"><div class="stat-label">📆 Pin xả tháng</div><div class="stat-number"><span id="monthDischarge">0</span> kWh</div></div>
-                <div class="stat-item"><div class="stat-label">📆 PV tháng</div><div class="stat-number"><span id="monthPv">0</span> kWh</div></div>
+                <div class="stat-item"><div class="stat-label">Pin sạc hôm nay</div><div class="stat-number"><span id="dailyCharge">0</span> kWh</div></div>
+                <div class="stat-item"><div class="stat-label">Pin xả hôm nay</div><div class="stat-number"><span id="dailyDischarge">0</span> kWh</div></div>
+                <div class="stat-item"><div class="stat-label">PV hôm nay</div><div class="stat-number"><span id="dailyPv">0</span> kWh</div></div>
+                <div class="stat-item"><div class="stat-label">Pin sạc tháng</div><div class="stat-number"><span id="monthCharge">0</span> kWh</div></div>
+                <div class="stat-item"><div class="stat-label">Pin xả tháng</div><div class="stat-number"><span id="monthDischarge">0</span> kWh</div></div>
+                <div class="stat-item"><div class="stat-label">PV tháng</div><div class="stat-number"><span id="monthPv">0</span> kWh</div></div>
             </div>
         </div>
-    </div>
+    </section>
 
-    <div class="chart-row">
-        <div class="chart-box"><h4>📊 SẢN LƯỢNG HÔM NAY (kWh)</h4><canvas id="dailyBarChart" height="200"></canvas></div>
-        <div class="chart-box"><h4>📈 SẢN LƯỢNG THÁNG NÀY (kWh)</h4><canvas id="monthlyLineChart" height="200"></canvas></div>
-    </div>
+    <section class="analytics-workbench glass-card">
+        <div class="section-head">
+            <div>
+                <div class="eyebrow">Analysis</div>
+                <h2><i class="fas fa-clock-rotate-left"></i> Lịch sử & biểu đồ</h2>
+            </div>
+            <div class="history-range-summary" id="historyRangeSummary">24 giờ qua</div>
+        </div>
 
-    <div class="glass-card history-panel">
-        <h2><i class="fas fa-clock-rotate-left"></i> THEO DÕI LỊCH SỬ</h2>
         <div class="history-controls">
             <div class="history-compact">
                 <label class="history-field">Mốc thời gian
@@ -198,42 +248,51 @@
                     <button id="exportCsv"><i class="fas fa-file-csv"></i> CSV</button>
                 </div>
             </div>
-            <div class="history-range-summary" id="historyRangeSummary">24 giờ qua</div>
         </div>
-    </div>
 
-    <div class="analytics-grid">
-        <div class="chart-box">
-            <h4><i class="fas fa-wave-square"></i> CÔNG SUẤT REALTIME</h4>
-            <div class="chart-actions">
-                <button class="line-toggle active" data-chart="livePowerChart" data-dataset="0">PV</button>
-                <button class="line-toggle active" data-chart="livePowerChart" data-dataset="1">Tải</button>
-                <button class="line-toggle active" data-chart="livePowerChart" data-dataset="2">Pin</button>
-                <button class="line-toggle active" data-chart="livePowerChart" data-dataset="3">Bù lưới</button>
-            </div>
-            <canvas id="livePowerChart" height="220"></canvas>
+        <div class="chart-row yield-row">
+            <div class="chart-box"><h4><i class="fas fa-chart-column"></i> Sản lượng hôm nay</h4><canvas id="dailyBarChart" height="200"></canvas></div>
+            <div class="chart-box"><h4><i class="fas fa-calendar-days"></i> Sản lượng tháng này</h4><canvas id="monthlyLineChart" height="200"></canvas></div>
         </div>
-        <div class="chart-box">
-            <h4><i class="fas fa-battery-three-quarters"></i> PIN: SOC / ĐIỆN ÁP</h4>
-            <div class="chart-actions">
-                <button class="line-toggle active" data-chart="batteryTrendChart" data-dataset="0">SOC</button>
-                <button class="line-toggle active" data-chart="batteryTrendChart" data-dataset="1">Điện áp</button>
-            </div>
-            <canvas id="batteryTrendChart" height="220"></canvas>
-        </div>
-        <div class="chart-box">
-            <h4><i class="fas fa-temperature-half"></i> NHIỆT ĐỘ HỆ THỐNG</h4>
-            <div class="chart-actions">
-                <button class="line-toggle active" data-chart="temperatureChart" data-dataset="0">Inverter</button>
-                <button class="line-toggle active" data-chart="temperatureChart" data-dataset="1">MOS</button>
-            </div>
-            <canvas id="temperatureChart" height="220"></canvas>
-        </div>
-        <div class="chart-box chart-box-compact"><h4><i class="fas fa-chart-pie"></i> PHÂN BỔ CÔNG SUẤT</h4><canvas id="powerMixChart" height="220"></canvas></div>
-    </div>
 
-    <div class="glass-card">
-        <h2><i class="fas fa-list-ul"></i> BẢNG TỔNG HỢP CHI TIẾT</h2>
+        <div class="analytics-grid">
+            <div class="chart-box power-chart">
+                <h4><i class="fas fa-wave-square"></i> Công suất realtime</h4>
+                <div class="chart-actions">
+                    <button class="line-toggle active" data-chart="livePowerChart" data-dataset="0">PV</button>
+                    <button class="line-toggle active" data-chart="livePowerChart" data-dataset="1">Tải</button>
+                    <button class="line-toggle active" data-chart="livePowerChart" data-dataset="2">Pin</button>
+                    <button class="line-toggle active" data-chart="livePowerChart" data-dataset="3">Bù lưới</button>
+                </div>
+                <canvas id="livePowerChart" height="220"></canvas>
+            </div>
+            <div class="chart-box">
+                <h4><i class="fas fa-battery-three-quarters"></i> Pin: SOC / điện áp</h4>
+                <div class="chart-actions">
+                    <button class="line-toggle active" data-chart="batteryTrendChart" data-dataset="0">SOC</button>
+                    <button class="line-toggle active" data-chart="batteryTrendChart" data-dataset="1">Điện áp</button>
+                </div>
+                <canvas id="batteryTrendChart" height="220"></canvas>
+            </div>
+            <div class="chart-box">
+                <h4><i class="fas fa-temperature-half"></i> Nhiệt độ hệ thống</h4>
+                <div class="chart-actions">
+                    <button class="line-toggle active" data-chart="temperatureChart" data-dataset="0">Inverter</button>
+                    <button class="line-toggle active" data-chart="temperatureChart" data-dataset="1">MOS</button>
+                </div>
+                <canvas id="temperatureChart" height="220"></canvas>
+            </div>
+            <div class="chart-box chart-box-compact"><h4><i class="fas fa-chart-pie"></i> Phân bổ công suất</h4><canvas id="powerMixChart" height="220"></canvas></div>
+        </div>
+    </section>
+
+    <section class="glass-card detail-card">
+        <div class="section-head">
+            <div>
+                <div class="eyebrow">Telemetry</div>
+                <h2><i class="fas fa-list-ul"></i> Bảng tổng hợp chi tiết</h2>
+            </div>
+        </div>
         <table class="data-table">
             <thead><tr><th>Thông số</th><th>Giá trị</th><th>Thông số</th><th>Giá trị</th></tr></thead>
             <tbody>
@@ -245,7 +304,8 @@
                 <tr><td>JK SOC</td><td id="tblSoc">-- %</td><td>Dòng pin</td><td id="tblBattA">-- A</td></tr>
             </tbody>
         </table>
-    </div>
+    </section>
+
     <footer>NLMT Dashboard V2 | Read-only dashboard | Armbian worker ghi Supabase</footer>
 </div>
 <script src="supabase-config.js"></script>

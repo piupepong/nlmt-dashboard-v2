@@ -499,7 +499,7 @@ let pulse = 0;
 function resizeFlow() {
     const container = canvas.parentElement;
     width = container.clientWidth;
-    height = window.innerWidth <= 860 ? 520 : 210;
+    height = window.innerWidth <= 860 ? 520 : 330;
     if (window.innerWidth <= 560) height = 540;
     canvas.width = width;
     canvas.height = height;
