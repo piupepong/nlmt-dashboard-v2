@@ -537,6 +537,46 @@ h2 i,
     transition: width 0.35s ease;
 }
 
+.fc-runtime {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 32px;
+    margin-top: 9px;
+    padding: 7px 9px;
+    border: 1px solid rgba(129, 232, 215, 0.2);
+    border-radius: 12px;
+    background: rgba(91, 240, 201, 0.09);
+}
+
+.fc-runtime span {
+    color: var(--subtle);
+    font-size: 0.62rem;
+    line-height: 1.1;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.fc-runtime strong {
+    color: var(--text);
+    font-size: 0.9rem;
+    line-height: 1;
+    font-weight: 950;
+    white-space: nowrap;
+}
+
+.fc-runtime.charging {
+    border-color: rgba(79, 224, 143, 0.3);
+    background: rgba(79, 224, 143, 0.13);
+}
+
+.fc-runtime.low {
+    border-color: rgba(255, 109, 98, 0.34);
+    background: rgba(255, 109, 98, 0.14);
+}
+
 .fc-meta {
     display: inline-flex;
     align-items: center;
@@ -1060,6 +1100,19 @@ footer {
     .fc-mini-bar {
         height: 11px;
         margin-top: 12px;
+    }
+
+    .fc-runtime {
+        min-height: 36px;
+        padding: 8px 10px;
+    }
+
+    .fc-runtime span {
+        font-size: 0.68rem;
+    }
+
+    .fc-runtime strong {
+        font-size: 1rem;
     }
 }
 

@@ -52,3 +52,14 @@ esphomeEventUrl: "https://piupepong.ddnsfree.com/events"
 ```
 
 Endpoint nay tra `text/event-stream` va co CORS, nen GitHub Pages/HTTPS va web LAN deu co the lay truc tiep tu ESPHome. Neu endpoint nay loi, dashboard tu roi ve Supabase fallback va khong ghi database.
+
+## Thoi gian su dung con lai
+
+Topology tinh thoi gian con lai tren node Pin tu `JK Dung Luong Con Lai`, `JK Dung Luong Cai Dat`, dien ap pin va cong suat xa hien tai. Cau hinh du phong trong `supabase-config.js`:
+
+```js
+batteryReserveSoc: 20,
+batteryCapacityKwh: 10.8
+```
+
+Neu sensor JK dung luong co du lieu, dashboard uu tien sensor nay. `batteryCapacityKwh` chi dung khi thieu dung luong Ah tu ESPHome.

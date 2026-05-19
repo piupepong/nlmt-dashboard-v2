@@ -4,6 +4,10 @@ const SUPABASE_CONFIG = window.SUPABASE_CONFIG || {};
 const SUPABASE_TABLE = SUPABASE_CONFIG.table || 'energy_samples';
 const DEVICE_ID = SUPABASE_CONFIG.deviceId || 'nlmt-main';
 const ESPHOME_EVENT_URL = SUPABASE_CONFIG.esphomeEventUrl || window.ESPHOME_EVENT_URL || '';
+const BATTERY_CAPACITY_KWH = Number(SUPABASE_CONFIG.batteryCapacityKwh);
+const BATTERY_RESERVE_SOC = Number.isFinite(Number(SUPABASE_CONFIG.batteryReserveSoc))
+    ? Math.max(0, Math.min(95, Number(SUPABASE_CONFIG.batteryReserveSoc)))
+    : 20;
 const THEME_STORAGE_KEY = 'nlmt-theme-v1';
 const THEME_AUTO_STORAGE_KEY = 'nlmt-theme-auto-v1';
 let supabaseClient = null;
@@ -26,6 +30,7 @@ let realData = {
     battVoltage: null, soc: null, invTemp: null,
     loadPercent: null, freq: null, apparent: null, gridVoltage: null,
     jkCurrent: null, jkPower: null, tempMos: null, cellDiff: null,
+    batteryRemainingAh: null, batteryCapacityAh: null,
     outputVoltage: null,
     dailyCharge: null, dailyDischarge: null, dailyPv: null,
     monthCharge: null, monthDischarge: null, monthPv: null
@@ -47,6 +52,10 @@ const sensorMap = {
     'sensor-jk_soc': 'soc',
     'sensor-jk_dong_pin': 'jkCurrent',
     'sensor-jk_cong_suat_pin': 'jkPower',
+    'sensor-jk_dung_luong_con_lai': 'batteryRemainingAh',
+    'sensor-jk_dung_luong_cai_dat': 'batteryCapacityAh',
+    'sensor-jk_tong_dung_luong': 'batteryCapacityAh',
+    'number-jk_tong_dung_luong': 'batteryCapacityAh',
     'sensor-nhiet_do_inverter': 'invTemp',
     'sensor-tai_phan_tram': 'loadPercent',
     'sensor-tai_bieu_kien': 'apparent',
@@ -85,6 +94,18 @@ function numberOrNull(value, digits = null) {
 function formatValue(value, digits = 0) {
     if (!Number.isFinite(value)) return '--';
     return digits > 0 ? value.toFixed(digits) : Math.round(value).toString();
+}
+
+function formatRuntime(hours) {
+    if (!Number.isFinite(hours) || hours < 0) return '--';
+    if (hours === 0) return '0p';
+    if (hours < 1 / 60) return '<1p';
+    if (hours >= 100) return '>99h';
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
+    if (wholeHours <= 0) return `${minutes}p`;
+    if (minutes >= 60) return `${wholeHours + 1}h`;
+    return minutes > 0 ? `${wholeHours}h ${minutes}p` : `${wholeHours}h`;
 }
 
 function productionValue(key) {
@@ -438,6 +459,33 @@ function applyEsphomeSensorValue(key, id, numericValue) {
     return true;
 }
 
+function estimateBatteryRuntime() {
+    const batteryPower = realData.bat;
+    if (!Number.isFinite(batteryPower)) return {text: '--', state: 'unknown'};
+    if (batteryPower > 15) return {text: 'Đang sạc', state: 'charging'};
+    if (batteryPower >= -15) return {text: 'Không xả', state: 'idle'};
+
+    const dischargeW = Math.abs(batteryPower);
+    const voltage = Number.isFinite(realData.battVoltage) ? realData.battVoltage : null;
+    const soc = Number.isFinite(realData.soc) ? Math.max(0, Math.min(100, realData.soc)) : null;
+    const capacityAh = Number.isFinite(realData.batteryCapacityAh) ? realData.batteryCapacityAh : null;
+    const remainingAh = Number.isFinite(realData.batteryRemainingAh) ? realData.batteryRemainingAh : null;
+    let usableWh = null;
+
+    if (Number.isFinite(remainingAh) && Number.isFinite(voltage)) {
+        const reserveAh = Number.isFinite(capacityAh) ? capacityAh * BATTERY_RESERVE_SOC / 100 : 0;
+        usableWh = Math.max(0, remainingAh - reserveAh) * voltage;
+    } else if (Number.isFinite(capacityAh) && Number.isFinite(voltage) && Number.isFinite(soc)) {
+        usableWh = capacityAh * voltage * Math.max(0, soc - BATTERY_RESERVE_SOC) / 100;
+    } else if (Number.isFinite(BATTERY_CAPACITY_KWH) && Number.isFinite(soc)) {
+        usableWh = BATTERY_CAPACITY_KWH * 1000 * Math.max(0, soc - BATTERY_RESERVE_SOC) / 100;
+    }
+
+    if (!Number.isFinite(usableWh)) return {text: '--', state: 'unknown'};
+    if (usableWh <= 0) return {text: 'Dưới dự trữ', state: 'low'};
+    return {text: formatRuntime(usableWh / dischargeW), state: 'discharging'};
+}
+
 function updatePowerMixOnly() {
     if (!powerMixChart) return;
     powerMixChart.data.datasets[0].data = [
@@ -552,10 +600,17 @@ function updateFloatingCards() {
     setText('gridMetaFloat', `${formatValue(realData.gridVoltage, 1)} V`);
 
     let battAbs = Math.abs(valueOrZero(realData.bat));
+    const runtime = estimateBatteryRuntime();
     setText('battPowerFloat', Number.isFinite(realData.bat) ? Math.round(battAbs) : '--');
     setHtml('battSOCFloat', `SOC ${formatValue(realData.soc)}%`);
     const battSocFill = document.getElementById('battSocMiniFill');
     if (battSocFill) battSocFill.style.width = `${soc}%`;
+    setText('battRuntimeFloat', runtime.text);
+    const runtimeBox = document.querySelector('#cardBatt .fc-runtime');
+    if (runtimeBox) {
+        runtimeBox.classList.remove('charging', 'idle', 'low', 'discharging', 'unknown');
+        runtimeBox.classList.add(runtime.state);
+    }
     setText('battCurrentFloat', formatValue(realData.jkCurrent, 1));
     setText('battMosFloat', formatValue(realData.tempMos, 1));
     let arrowSpan = document.getElementById('battArrowFloat');
