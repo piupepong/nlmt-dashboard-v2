@@ -11,6 +11,11 @@ const DEVICE_ID = process.env.DEVICE_ID || 'nlmt-main';
 const SAMPLE_INTERVAL_MS = Number(process.env.SAMPLE_INTERVAL_MS || 60000);
 const ESPHOME_REFRESH_INTERVAL_MS = Number(process.env.ESPHOME_REFRESH_INTERVAL_MS || Math.min(Math.max(SAMPLE_INTERVAL_MS - 10000, 30000), 60000));
 const STALE_EVENT_MAX_MS = Number(process.env.STALE_EVENT_MAX_MS || Math.max(SAMPLE_INTERVAL_MS * 2, 120000));
+const HA_BASE_URL = (process.env.HA_BASE_URL || '').replace(/\/+$/, '');
+const HA_TOKEN = (process.env.HA_TOKEN || '').trim().replace(/^["']|["']$/g, '');
+const HA_REFRESH_INTERVAL_MS = Number(process.env.HA_REFRESH_INTERVAL_MS || SAMPLE_INTERVAL_MS);
+const LAST_ROW_REFRESH_INTERVAL_MS = Number(process.env.LAST_ROW_REFRESH_INTERVAL_MS || SAMPLE_INTERVAL_MS);
+const PRODUCTION_SENSOR_MAX_AGE_MS = Number(process.env.PRODUCTION_SENSOR_MAX_AGE_MS || Math.max(HA_REFRESH_INTERVAL_MS * 2, STALE_EVENT_MAX_MS));
 const PORT = Number(process.env.PORT || 3000);
 
 const sensorMap = {
@@ -72,7 +77,12 @@ let pendingInitialSave = false;
 let saving = false;
 let seededFromSupabase = false;
 let lastPersistedRow = null;
+let lastPersistedRefreshAt = null;
+let lastHaRefreshAt = null;
+let lastHaRefreshError = null;
 const tempMosSources = {};
+const productionKeys = new Set(['dailyCharge', 'dailyDischarge', 'dailyPv', 'monthCharge', 'monthDischarge', 'monthPv']);
+const productionUpdatedAt = {};
 
 function httpClientFor(url) {
     return url.protocol === 'https:' ? https : http;
@@ -156,6 +166,10 @@ function applySensorValue(key, id, numericValue) {
     if (!Number.isFinite(numericValue)) {
         realData[key] = null;
         return;
+    }
+
+    if (productionKeys.has(key)) {
+        productionUpdatedAt[key] = Date.now();
     }
 
     if (key === 'tempMos') {
@@ -255,6 +269,20 @@ function productionBase(row, column) {
     return Number.isFinite(value) ? value : 0;
 }
 
+function hasFreshProductionSensor(key, currentTs) {
+    const updatedAt = productionUpdatedAt[key];
+    return Number.isFinite(updatedAt) && currentTs - updatedAt <= PRODUCTION_SENSOR_MAX_AGE_MS;
+}
+
+function scoreProductionState(state, key) {
+    const unit = String(state.attributes?.unit_of_measurement || '').toLowerCase();
+    const entityId = String(state.entity_id || '');
+    let score = sensorMap[entityId] === key ? 100 : 0;
+    if (entityId.includes('nangluongmattroi')) score += 20;
+    if (unit.includes('kwh')) score += 30;
+    return score;
+}
+
 function applyCalculatedProduction(row, previousRow) {
     const currentTs = row.ts ? new Date(row.ts).getTime() : NaN;
     const previousTs = previousRow && previousRow.ts ? new Date(previousRow.ts).getTime() : NaN;
@@ -279,12 +307,12 @@ function applyCalculatedProduction(row, previousRow) {
     const previousMonthCharge = sameMonth ? productionBase(previousRow, 'month_charge_kwh') : 0;
     const previousMonthDischarge = sameMonth ? productionBase(previousRow, 'month_discharge_kwh') : 0;
 
-    if (Number.isFinite(previousDailyPv)) row.daily_pv_kwh = roundedKwh(previousDailyPv + pvDelta);
-    if (Number.isFinite(previousDailyCharge)) row.daily_charge_kwh = roundedKwh(previousDailyCharge + chargeDelta);
-    if (Number.isFinite(previousDailyDischarge)) row.daily_discharge_kwh = roundedKwh(previousDailyDischarge + dischargeDelta);
-    if (Number.isFinite(previousMonthPv)) row.month_pv_kwh = roundedKwh(previousMonthPv + pvDelta);
-    if (Number.isFinite(previousMonthCharge)) row.month_charge_kwh = roundedKwh(previousMonthCharge + chargeDelta);
-    if (Number.isFinite(previousMonthDischarge)) row.month_discharge_kwh = roundedKwh(previousMonthDischarge + dischargeDelta);
+    if (!hasFreshProductionSensor('dailyPv', currentTs)) row.daily_pv_kwh = roundedKwh(previousDailyPv + pvDelta);
+    if (!hasFreshProductionSensor('dailyCharge', currentTs)) row.daily_charge_kwh = roundedKwh(previousDailyCharge + chargeDelta);
+    if (!hasFreshProductionSensor('dailyDischarge', currentTs)) row.daily_discharge_kwh = roundedKwh(previousDailyDischarge + dischargeDelta);
+    if (!hasFreshProductionSensor('monthPv', currentTs)) row.month_pv_kwh = roundedKwh(previousMonthPv + pvDelta);
+    if (!hasFreshProductionSensor('monthCharge', currentTs)) row.month_charge_kwh = roundedKwh(previousMonthCharge + chargeDelta);
+    if (!hasFreshProductionSensor('monthDischarge', currentTs)) row.month_discharge_kwh = roundedKwh(previousMonthDischarge + dischargeDelta);
 
     return row;
 }
@@ -311,6 +339,7 @@ async function seedLatestFromSupabase() {
         });
         if (!rows || !rows.length) return false;
         lastPersistedRow = rows[0];
+        lastPersistedRefreshAt = Date.now();
 
         setLatestNumber(rows, 'pv', 'pv_w');
         setLatestNumber(rows, 'load', 'load_w');
@@ -349,6 +378,78 @@ async function seedLatestFromSupabase() {
     } catch (err) {
         lastSaveError = `Seed latest failed: ${err.message}`;
         console.warn(lastSaveError);
+        return false;
+    }
+}
+
+async function refreshLastPersistedRowFromSupabase(force = false) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return false;
+    if (!force && lastPersistedRefreshAt && Date.now() - lastPersistedRefreshAt < LAST_ROW_REFRESH_INTERVAL_MS) return false;
+
+    try {
+        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?` +
+            `device_id=eq.${encodeURIComponent(DEVICE_ID)}` +
+            '&select=ts,daily_charge_kwh,daily_discharge_kwh,daily_pv_kwh,month_charge_kwh,month_discharge_kwh,month_pv_kwh' +
+            '&order=ts.desc&limit=1';
+        const rows = await requestJson(url, {
+            headers: {
+                apikey: SUPABASE_KEY,
+                Authorization: `Bearer ${SUPABASE_KEY}`,
+                Accept: 'application/json'
+            }
+        });
+        if (rows && rows.length) {
+            lastPersistedRow = {...(lastPersistedRow || {}), ...rows[0]};
+        }
+        lastPersistedRefreshAt = Date.now();
+        return true;
+    } catch (err) {
+        lastSaveError = `Refresh latest Supabase row failed: ${err.message}`;
+        console.warn(lastSaveError);
+        return false;
+    }
+}
+
+async function refreshProductionFromHomeAssistant(force = false) {
+    if (!HA_BASE_URL || !HA_TOKEN) return false;
+    if (!force && lastHaRefreshAt && Date.now() - lastHaRefreshAt < HA_REFRESH_INTERVAL_MS) return false;
+
+    try {
+        const states = await requestJson(`${HA_BASE_URL}/api/states`, {
+            headers: {
+                Authorization: `Bearer ${HA_TOKEN}`,
+                Accept: 'application/json'
+            }
+        });
+        const bestByKey = new Map();
+        for (const state of states || []) {
+            const key = resolveSensorKey(state.entity_id);
+            if (!productionKeys.has(key)) continue;
+            const numericValue = Number.parseFloat(state.state);
+            if (!Number.isFinite(numericValue)) continue;
+            const candidate = {
+                key,
+                value: numericValue,
+                score: scoreProductionState(state, key)
+            };
+            const current = bestByKey.get(key);
+            if (!current || candidate.score > current.score) bestByKey.set(key, candidate);
+        }
+
+        const now = Date.now();
+        for (const [key, candidate] of bestByKey) {
+            realData[key] = candidate.value;
+            productionUpdatedAt[key] = now;
+        }
+        lastHaRefreshAt = now;
+        lastHaRefreshError = null;
+        const updated = bestByKey.size;
+        if (updated) console.log(`Refreshed ${updated} production counters from Home Assistant.`);
+        return updated > 0;
+    } catch (err) {
+        lastHaRefreshAt = Date.now();
+        lastHaRefreshError = err.message;
+        console.warn('Home Assistant production refresh failed:', err.message);
         return false;
     }
 }
@@ -428,9 +529,11 @@ async function saveSampleToSupabase() {
     }
 
     saving = true;
-    const fullRow = applyCalculatedProduction(historySampleToRow(createHistorySample()), lastPersistedRow);
-    const row = omitNullValues(fullRow);
     try {
+        await refreshProductionFromHomeAssistant();
+        await refreshLastPersistedRowFromSupabase();
+        const fullRow = applyCalculatedProduction(historySampleToRow(createHistorySample()), lastPersistedRow);
+        const row = omitNullValues(fullRow);
         const response = await requestText(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?on_conflict=device_id,ts`, {
             method: 'POST',
             headers: {
@@ -567,7 +670,10 @@ http.createServer((req, res) => {
         stale: !hasFreshEventData(),
         lastSaveAt,
         lastSaveError,
-        deviceId: DEVICE_ID
+        deviceId: DEVICE_ID,
+        haConfigured: Boolean(HA_BASE_URL && HA_TOKEN),
+        lastHaRefreshAt,
+        lastHaRefreshError
     }));
 }).listen(PORT, () => {
     console.log(`Health server listening on ${PORT}`);

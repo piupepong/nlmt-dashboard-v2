@@ -23,12 +23,19 @@ DEVICE_ID=nlmt-main
 SAMPLE_INTERVAL_MS=60000
 ESPHOME_REFRESH_INTERVAL_MS=50000
 STALE_EVENT_MAX_MS=120000
+HA_BASE_URL=http://192.168.1.76:8123
+HA_TOKEN=<home-assistant-long-lived-token>
+HA_REFRESH_INTERVAL_MS=60000
+LAST_ROW_REFRESH_INTERVAL_MS=60000
+PRODUCTION_SENSOR_MAX_AGE_MS=180000
 ```
 
 Nen dung `SUPABASE_SERVICE_ROLE_KEY` tren Render, khong dua key nay vao frontend.
 
 `ESPHOME_REFRESH_INTERVAL_MS` lam moi ket noi SSE truoc moi lan luu de worker khong ghi lap snapshot cu khi proxy/SSE bi dung yen.
 `STALE_EVENT_MAX_MS` chan ghi database neu ESPHome state qua cu; khi do worker reconnect va bo qua lan luu thay vi ghi sai.
+`HA_BASE_URL` va `HA_TOKEN` la tuy chon nhung nen bat tren Armbian LAN. Worker van lay cong suat realtime tu ESPHome, nhung truoc khi luu se doc counter kWh tu Home Assistant de `daily_*_kwh` va `month_*_kwh` khong bi lech do tu tich phan W.
+`LAST_ROW_REFRESH_INTERVAL_MS` lam moi dong moi nhat trong Supabase, giup worker khong tinh tiep tu bo nho cu sau khi backfill/import lai du lieu.
 
 ## Bao mat key
 
