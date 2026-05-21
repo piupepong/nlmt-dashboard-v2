@@ -26,5 +26,7 @@ services:
         value: 60000
       - key: ESPHOME_REFRESH_INTERVAL_MS
         value: 50000
+      - key: STALE_EVENT_MAX_MS
+        value: 120000
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false

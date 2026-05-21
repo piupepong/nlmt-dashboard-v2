@@ -22,11 +22,13 @@ SUPABASE_TABLE=energy_samples
 DEVICE_ID=nlmt-main
 SAMPLE_INTERVAL_MS=60000
 ESPHOME_REFRESH_INTERVAL_MS=50000
+STALE_EVENT_MAX_MS=120000
 ```
 
 Nen dung `SUPABASE_SERVICE_ROLE_KEY` tren Render, khong dua key nay vao frontend.
 
 `ESPHOME_REFRESH_INTERVAL_MS` lam moi ket noi SSE truoc moi lan luu de worker khong ghi lap snapshot cu khi proxy/SSE bi dung yen.
+`STALE_EVENT_MAX_MS` chan ghi database neu ESPHome state qua cu; khi do worker reconnect va bo qua lan luu thay vi ghi sai.
 
 ## Bao mat key
 

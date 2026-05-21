@@ -10,6 +10,7 @@ const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '')
 const DEVICE_ID = process.env.DEVICE_ID || 'nlmt-main';
 const SAMPLE_INTERVAL_MS = Number(process.env.SAMPLE_INTERVAL_MS || 60000);
 const ESPHOME_REFRESH_INTERVAL_MS = Number(process.env.ESPHOME_REFRESH_INTERVAL_MS || Math.min(Math.max(SAMPLE_INTERVAL_MS - 10000, 30000), 60000));
+const STALE_EVENT_MAX_MS = Number(process.env.STALE_EVENT_MAX_MS || Math.max(SAMPLE_INTERVAL_MS * 2, 120000));
 const PORT = Number(process.env.PORT || 3000);
 
 const sensorMap = {
@@ -356,6 +357,15 @@ function hasRealtimeData() {
     return ['pv', 'load', 'bat', 'grid', 'soc', 'battVoltage', 'invTemp', 'tempMos'].some(key => Number.isFinite(realData[key]));
 }
 
+function eventAgeMs() {
+    return lastEventAt ? Date.now() - lastEventAt : null;
+}
+
+function hasFreshEventData() {
+    const age = eventAgeMs();
+    return Number.isFinite(age) && age <= STALE_EVENT_MAX_MS;
+}
+
 function createHistorySample() {
     const ts = Math.floor(Date.now() / SAMPLE_INTERVAL_MS) * SAMPLE_INTERVAL_MS;
     const batteryPower = effectiveBatteryPower();
@@ -409,6 +419,13 @@ async function saveSampleToSupabase() {
     }
     await seedLatestFromSupabase();
     if (!hasRealtimeData()) return;
+    if (!hasFreshEventData()) {
+        const message = `Skip save: ESPHome state is stale (${eventAgeMs() ?? 'never'} ms old).`;
+        lastSaveError = message;
+        console.warn(message);
+        closeEventsConnection('stale state before save');
+        return;
+    }
 
     saving = true;
     const fullRow = applyCalculatedProduction(historySampleToRow(createHistorySample()), lastPersistedRow);
@@ -546,6 +563,8 @@ http.createServer((req, res) => {
         ok: true,
         connected,
         lastEventAt,
+        lastEventAgeMs: eventAgeMs(),
+        stale: !hasFreshEventData(),
         lastSaveAt,
         lastSaveError,
         deviceId: DEVICE_ID
