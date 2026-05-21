@@ -21,9 +21,12 @@ SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 SUPABASE_TABLE=energy_samples
 DEVICE_ID=nlmt-main
 SAMPLE_INTERVAL_MS=60000
+ESPHOME_REFRESH_INTERVAL_MS=50000
 ```
 
 Nen dung `SUPABASE_SERVICE_ROLE_KEY` tren Render, khong dua key nay vao frontend.
+
+`ESPHOME_REFRESH_INTERVAL_MS` lam moi ket noi SSE truoc moi lan luu de worker khong ghi lap snapshot cu khi proxy/SSE bi dung yen.
 
 ## Bao mat key
 

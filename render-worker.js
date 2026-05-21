@@ -9,6 +9,7 @@ const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '')
     .replace(/^["']|["']$/g, '');
 const DEVICE_ID = process.env.DEVICE_ID || 'nlmt-main';
 const SAMPLE_INTERVAL_MS = Number(process.env.SAMPLE_INTERVAL_MS || 60000);
+const ESPHOME_REFRESH_INTERVAL_MS = Number(process.env.ESPHOME_REFRESH_INTERVAL_MS || Math.min(Math.max(SAMPLE_INTERVAL_MS - 10000, 30000), 60000));
 const PORT = Number(process.env.PORT || 3000);
 
 const sensorMap = {
@@ -64,6 +65,8 @@ let lastSaveAt = null;
 let lastSaveError = null;
 let connected = false;
 let reconnectTimer = null;
+let activeEventRequest = null;
+let activeEventResponse = null;
 let pendingInitialSave = false;
 let saving = false;
 let seededFromSupabase = false;
@@ -483,6 +486,19 @@ function scheduleReconnect() {
     }, 5000);
 }
 
+function closeEventsConnection(reason = 'refresh') {
+    if (reason) console.log(`Closing ESPHome SSE for ${reason}.`);
+    if (activeEventResponse) {
+        activeEventResponse.destroy();
+        activeEventResponse = null;
+    }
+    if (activeEventRequest) {
+        activeEventRequest.destroy();
+        activeEventRequest = null;
+    }
+    connected = false;
+}
+
 async function connectEvents() {
     try {
         console.log('Connecting ESPHome SSE:', EVENT_URL);
@@ -492,6 +508,7 @@ async function connectEvents() {
                 method: 'GET',
                 headers: {Accept: 'text/event-stream'}
             }, res => {
+                activeEventResponse = res;
                 if (res.statusCode < 200 || res.statusCode >= 300) {
                     reject(new Error(`SSE HTTP ${res.statusCode}`));
                     res.resume();
@@ -510,12 +527,15 @@ async function connectEvents() {
                 res.on('end', resolve);
                 res.on('error', reject);
             });
+            activeEventRequest = req;
             req.on('error', reject);
             req.end();
         });
     } catch (err) {
         console.warn('ESPHome SSE disconnected:', err.message);
     } finally {
+        activeEventRequest = null;
+        activeEventResponse = null;
         scheduleReconnect();
     }
 }
@@ -536,3 +556,6 @@ http.createServer((req, res) => {
 
 connectEvents();
 setInterval(saveSampleToSupabase, SAMPLE_INTERVAL_MS);
+setInterval(() => {
+    if (connected) closeEventsConnection('periodic snapshot refresh');
+}, ESPHOME_REFRESH_INTERVAL_MS);

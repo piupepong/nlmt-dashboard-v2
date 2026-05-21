@@ -24,5 +24,7 @@ services:
         value: nlmt-main
       - key: SAMPLE_INTERVAL_MS
         value: 60000
+      - key: ESPHOME_REFRESH_INTERVAL_MS
+        value: 50000
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
