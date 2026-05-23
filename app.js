@@ -295,7 +295,7 @@ function estimateGridEnergy(samples) {
 }
 
 function updateInsights() {
-    const samples = getChartHistory();
+    const samples = getSelectedHistory();
     const pvValues = finiteValues(samples, 'pv');
     const loadValues = finiteValues(samples, 'load');
     const socValues = finiteValues(samples, 'soc');
@@ -898,7 +898,7 @@ let lastHistoryAt = 0;
 const HISTORY_STORAGE_KEY = 'nlmt-history-v1';
 const HISTORY_SAMPLE_INTERVAL = 60 * 1000;
 const HISTORY_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
-const MAX_CHART_POINTS = 1200;
+const MAX_CHART_POINTS = 520;
 let historySamples = loadHistory();
 let selectedRange = {from: Date.now() - 24 * 60 * 60 * 1000, to: null};
 
@@ -920,7 +920,21 @@ function glassChartOptions(extra = {}) {
     return {
         responsive: true,
         maintainAspectRatio: true,
+        animation: false,
+        normalized: true,
         interaction: {mode: 'index', intersect: false},
+        elements: {
+            line: {
+                borderCapStyle: 'round',
+                borderJoinStyle: 'round',
+                cubicInterpolationMode: 'monotone'
+            },
+            point: {
+                radius: 0,
+                hitRadius: 10,
+                hoverRadius: 3
+            }
+        },
         plugins: {
             legend: {
                 labels: {
@@ -941,7 +955,7 @@ function glassChartOptions(extra = {}) {
             }
         },
         scales: {
-            x: {grid: {color: theme.gridSoft}, ticks: {color: theme.text}},
+            x: {grid: {color: theme.gridSoft}, ticks: {color: theme.text, autoSkip: true, maxTicksLimit: 8, maxRotation: 0}},
             y: {grid: {color: theme.grid}, ticks: {color: theme.text}}
         },
         ...extra
@@ -1331,14 +1345,36 @@ function pushHistory(force = false) {
     updateSystemStatus();
 }
 
-function getChartHistory() {
+function getSelectedHistory() {
     const now = Date.now();
     const from = Number.isFinite(selectedRange.from) ? selectedRange.from : -Infinity;
     const to = selectedRange.to || now;
-    const filtered = historySamples.filter(sample => sample.ts >= from && sample.ts <= to);
-    if (filtered.length <= MAX_CHART_POINTS) return filtered;
-    const stride = Math.ceil(filtered.length / MAX_CHART_POINTS);
-    return filtered.filter((_, index) => index % stride === 0);
+    return historySamples.filter(sample => sample.ts >= from && sample.ts <= to);
+}
+
+function averagedBucket(samples) {
+    const numericKeys = ['pv', 'load', 'bat', 'grid', 'soc', 'voltage', 'invTemp', 'mosTemp'];
+    const middle = samples[Math.floor(samples.length / 2)] || samples[0];
+    const bucket = {...middle, ts: middle?.ts};
+    numericKeys.forEach(key => {
+        const values = samples.map(sample => sample[key]).filter(Number.isFinite);
+        bucket[key] = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+    });
+    return bucket;
+}
+
+function smoothChartSamples(samples) {
+    if (samples.length <= MAX_CHART_POINTS) return samples;
+    const bucketSize = Math.ceil(samples.length / MAX_CHART_POINTS);
+    const smoothed = [];
+    for (let index = 0; index < samples.length; index += bucketSize) {
+        smoothed.push(averagedBucket(samples.slice(index, index + bucketSize)));
+    }
+    return smoothed;
+}
+
+function getChartHistory() {
+    return smoothChartSamples(getSelectedHistory());
 }
 
 function formatHistoryLabel(timestamp, spanMs) {
@@ -1392,7 +1428,7 @@ function csvCell(value) {
 }
 
 function exportHistoryCsv() {
-    const samples = getChartHistory();
+    const samples = getSelectedHistory();
     const header = ['time', 'pv_w', 'load_w', 'battery_w', 'grid_w', 'soc_percent', 'battery_voltage_v', 'inverter_temp_c', 'mos_temp_c'];
     const rows = samples.map(sample => [
         new Date(sample.ts).toISOString(),
@@ -1462,6 +1498,7 @@ function rangeFromPreset(preset) {
     if (preset === 'month') return {from: startOfLocalMonth(now), to: null, label: 'Tháng này'};
     if (preset === 'year') return {from: startOfLocalYear(now), to: null, label: 'Năm nay'};
     if (preset === '1h') return {from: now - hour, to: now, label: '1 giờ qua'};
+    if (preset === '3h') return {from: now - 3 * hour, to: now, label: '3 giờ qua'};
     if (preset === '12h') return {from: now - 12 * hour, to: now, label: '12 giờ qua'};
     if (preset === '7d') return {from: now - 7 * day, to: now, label: '7 ngày qua'};
     if (preset === '30d') return {from: now - 30 * day, to: now, label: '30 ngày qua'};
@@ -1475,13 +1512,13 @@ function rangeMatchesPreset(range, preset) {
     if (preset === 'all') return range.from === null && range.to === null;
     const to = range.to || null;
     const candidateTo = candidate.to || null;
-    const tolerance = ['1h', '12h', '24h', '7d', '30d', '90d'].includes(preset) ? 120000 : 60000;
+    const tolerance = ['1h', '3h', '12h', '24h', '7d', '30d', '90d'].includes(preset) ? 120000 : 60000;
     return Math.abs(range.from - candidate.from) < 60000 &&
         (to === candidateTo || (to !== null && candidateTo !== null && Math.abs(to - candidateTo) < tolerance));
 }
 
 function presetForRange(range) {
-    const presets = ['today', 'yesterday', 'week', 'month', 'year', '1h', '12h', '24h', '7d', '30d', '90d', 'all'];
+    const presets = ['today', 'yesterday', 'week', 'month', 'year', '1h', '3h', '12h', '24h', '7d', '30d', '90d', 'all'];
     return presets.find(preset => rangeMatchesPreset(range, preset)) || null;
 }
 
@@ -1606,10 +1643,10 @@ function initCharts() {
         data: {
             labels: [],
             datasets: [
-                {label: 'PV W', data: [], borderColor: '#f5b64a', backgroundColor: 'rgba(245,182,74,0.16)', pointRadius: 0, borderWidth: 3, tension: 0.36, spanGaps: true, fill: true},
-                {label: 'Tải W', data: [], borderColor: '#38bec7', backgroundColor: 'rgba(120,220,227,0.12)', pointRadius: 0, borderWidth: 3, tension: 0.36, spanGaps: true, fill: true},
-                {label: 'Pin W', data: [], borderColor: '#1f7061', backgroundColor: 'rgba(120,201,181,0.14)', pointRadius: 0, borderWidth: 3, tension: 0.36, spanGaps: true, fill: false},
-                {label: 'Bù lưới W', data: [], borderColor: '#8db5ff', backgroundColor: 'rgba(141,181,255,0.12)', pointRadius: 0, borderWidth: 3, tension: 0.36, spanGaps: true, fill: false}
+                {label: 'PV W', data: [], borderColor: '#f5b64a', backgroundColor: 'rgba(245,182,74,0.16)', pointRadius: 0, borderWidth: 3, tension: 0.48, cubicInterpolationMode: 'monotone', spanGaps: true, fill: true},
+                {label: 'Tải W', data: [], borderColor: '#38bec7', backgroundColor: 'rgba(120,220,227,0.12)', pointRadius: 0, borderWidth: 3, tension: 0.48, cubicInterpolationMode: 'monotone', spanGaps: true, fill: true},
+                {label: 'Pin W', data: [], borderColor: '#1f7061', backgroundColor: 'rgba(120,201,181,0.14)', pointRadius: 0, borderWidth: 3, tension: 0.48, cubicInterpolationMode: 'monotone', spanGaps: true, fill: false},
+                {label: 'Bù lưới W', data: [], borderColor: '#8db5ff', backgroundColor: 'rgba(141,181,255,0.12)', pointRadius: 0, borderWidth: 3, tension: 0.48, cubicInterpolationMode: 'monotone', spanGaps: true, fill: false}
             ]
         },
         options: glassChartOptions()
@@ -1635,13 +1672,13 @@ function initCharts() {
         data: {
             labels: [],
             datasets: [
-                {label: 'SOC %', data: [], borderColor: '#1f7061', backgroundColor: 'rgba(120,201,181,0.16)', pointRadius: 0, borderWidth: 3, tension: 0.36, spanGaps: true, yAxisID: 'y'},
-                {label: 'Điện áp V', data: [], borderColor: '#8db5ff', backgroundColor: 'rgba(141,181,255,0.12)', pointRadius: 0, borderWidth: 3, tension: 0.36, spanGaps: true, yAxisID: 'y1'}
+                {label: 'SOC %', data: [], borderColor: '#1f7061', backgroundColor: 'rgba(120,201,181,0.16)', pointRadius: 0, borderWidth: 3, tension: 0.44, cubicInterpolationMode: 'monotone', spanGaps: true, yAxisID: 'y'},
+                {label: 'Điện áp V', data: [], borderColor: '#8db5ff', backgroundColor: 'rgba(141,181,255,0.12)', pointRadius: 0, borderWidth: 3, tension: 0.44, cubicInterpolationMode: 'monotone', spanGaps: true, yAxisID: 'y1'}
             ]
         },
         options: glassChartOptions({
             scales: {
-                x: {grid: {color: chartTheme().gridSoft}, ticks: {color: chartTheme().text}},
+                x: {grid: {color: chartTheme().gridSoft}, ticks: {color: chartTheme().text, autoSkip: true, maxTicksLimit: 8, maxRotation: 0}},
                 y: {position: 'left', min: 0, max: 100, grid: {color: chartTheme().grid}, ticks: {color: chartTheme().text}},
                 y1: {position: 'right', grid: {drawOnChartArea: false}, ticks: {color: chartTheme().text}}
             }
@@ -1653,8 +1690,8 @@ function initCharts() {
         data: {
             labels: [],
             datasets: [
-                {label: 'Inverter °C', data: [], borderColor: '#f5a623', backgroundColor: 'rgba(245,166,35,0.16)', pointRadius: 0, borderWidth: 3, tension: 0.34, spanGaps: true, fill: true},
-                {label: 'MOS °C', data: [], borderColor: '#e76f51', backgroundColor: 'rgba(231,111,81,0.12)', pointRadius: 0, borderWidth: 3, tension: 0.34, spanGaps: true, fill: true}
+                {label: 'Inverter °C', data: [], borderColor: '#f5a623', backgroundColor: 'rgba(245,166,35,0.16)', pointRadius: 0, borderWidth: 3, tension: 0.42, cubicInterpolationMode: 'monotone', spanGaps: true, fill: true},
+                {label: 'MOS °C', data: [], borderColor: '#e76f51', backgroundColor: 'rgba(231,111,81,0.12)', pointRadius: 0, borderWidth: 3, tension: 0.42, cubicInterpolationMode: 'monotone', spanGaps: true, fill: true}
             ]
         },
         options: glassChartOptions()
