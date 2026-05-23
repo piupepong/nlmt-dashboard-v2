@@ -202,7 +202,7 @@ function updateChartTheme() {
     const theme = chartTheme();
     Chart.defaults.color = theme.text;
     Chart.defaults.borderColor = theme.grid;
-    [dailyChart, monthlyChart, livePowerChart, powerMixChart, batteryTrendChart, temperatureChart]
+    [dailyChart, monthlyChart, livePowerChart, powerMixChart, batteryTrendChart, temperatureChart, yieldDetailChart]
         .filter(Boolean)
         .forEach(chart => {
             if (chart.options.plugins?.legend?.labels) chart.options.plugins.legend.labels.color = theme.strong;
@@ -893,7 +893,7 @@ resizeFlow();
 drawFlow();
 
 // ========== 3. BIỂU ĐỒ ==========
-let dailyChart, monthlyChart, livePowerChart, powerMixChart, batteryTrendChart, temperatureChart;
+let dailyChart, monthlyChart, livePowerChart, powerMixChart, batteryTrendChart, temperatureChart, yieldDetailChart;
 let lastHistoryAt = 0;
 const HISTORY_STORAGE_KEY = 'nlmt-history-v1';
 const HISTORY_SAMPLE_INTERVAL = 60 * 1000;
@@ -1454,6 +1454,251 @@ function exportHistoryCsv() {
     URL.revokeObjectURL(url);
 }
 
+function addLocalMonths(timestamp, months) {
+    const date = new Date(timestamp);
+    date.setMonth(date.getMonth() + months);
+    return date.getTime();
+}
+
+function endOfLocalMonth(timestamp = Date.now()) {
+    const date = new Date(timestamp);
+    date.setMonth(date.getMonth() + 1, 0);
+    date.setHours(23, 59, 59, 999);
+    return date.getTime();
+}
+
+function yieldRangeFromPreset(preset) {
+    const now = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+    if (preset === '7d') return {from: startOfLocalDay(now - 6 * day), to: now};
+    if (preset === '90d') return {from: startOfLocalDay(now - 89 * day), to: now};
+    if (preset === '6m') return {from: startOfLocalMonth(addLocalMonths(now, -5)), to: now};
+    if (preset === '12m') return {from: startOfLocalMonth(addLocalMonths(now, -11)), to: now};
+    return {from: startOfLocalDay(now - 29 * day), to: now};
+}
+
+function setYieldDateInputs(range) {
+    const fromDate = document.getElementById('yieldFromDate');
+    const toDate = document.getElementById('yieldToDate');
+    if (fromDate) fromDate.value = formatDateInput(range.from);
+    if (toDate) toDate.value = formatDateInput(range.to || Date.now());
+}
+
+function readYieldRange() {
+    const preset = document.getElementById('yieldPresetSelect')?.value || '30d';
+    if (preset !== 'custom') return yieldRangeFromPreset(preset);
+    const fromValue = document.getElementById('yieldFromDate')?.value;
+    const toValue = document.getElementById('yieldToDate')?.value;
+    const from = fromValue ? new Date(`${fromValue}T00:00:00`).getTime() : NaN;
+    const to = toValue ? new Date(`${toValue}T23:59:59.999`).getTime() : NaN;
+    return {from, to};
+}
+
+function yieldBucketLabel(timestamp, group) {
+    const date = new Date(timestamp);
+    if (group === 'month') return `${padTimePart(date.getMonth() + 1)}/${date.getFullYear()}`;
+    return `${padTimePart(date.getDate())}/${padTimePart(date.getMonth() + 1)}`;
+}
+
+function buildYieldBuckets(range, group) {
+    const buckets = [];
+    const to = Math.min(range.to || Date.now(), Date.now());
+    let cursor = group === 'month' ? startOfLocalMonth(range.from) : startOfLocalDay(range.from);
+    while (cursor <= to && buckets.length < 380) {
+        const bucketEnd = group === 'month' ? Math.min(endOfLocalMonth(cursor), to) : Math.min(endOfLocalDay(cursor), to);
+        buckets.push({
+            from: cursor,
+            to: bucketEnd,
+            label: yieldBucketLabel(cursor, group)
+        });
+        cursor = group === 'month' ? addLocalMonths(cursor, 1) : startOfLocalDay(cursor + 24 * 60 * 60 * 1000);
+    }
+    return buckets;
+}
+
+function yieldValueFromRow(row, group, kind) {
+    const prefix = group === 'month' ? 'month' : 'daily';
+    const column = {
+        charge: `${prefix}_charge_kwh`,
+        discharge: `${prefix}_discharge_kwh`,
+        pv: `${prefix}_pv_kwh`
+    }[kind];
+    const value = row ? Number(row[column]) : NaN;
+    return Number.isFinite(value) ? value : 0;
+}
+
+async function fetchYieldBucket(bucket, group) {
+    const prefix = group === 'month' ? 'month' : 'daily';
+    const { data, error } = await supabaseClient
+        .from(SUPABASE_TABLE)
+        .select(`ts,${prefix}_charge_kwh,${prefix}_discharge_kwh,${prefix}_pv_kwh`)
+        .eq('device_id', DEVICE_ID)
+        .gte('ts', new Date(bucket.from).toISOString())
+        .lte('ts', new Date(bucket.to).toISOString())
+        .order('ts', { ascending: false })
+        .limit(1);
+    if (error) throw error;
+    const row = data?.[0] || null;
+    return {
+        ...bucket,
+        ts: row ? new Date(row.ts).getTime() : bucket.from,
+        charge: roundKwh(yieldValueFromRow(row, group, 'charge')),
+        discharge: roundKwh(yieldValueFromRow(row, group, 'discharge')),
+        pv: roundKwh(yieldValueFromRow(row, group, 'pv')),
+        hasData: Boolean(row)
+    };
+}
+
+async function mapYieldBuckets(buckets, group) {
+    const output = [];
+    const batchSize = 8;
+    for (let index = 0; index < buckets.length; index += batchSize) {
+        const batch = buckets.slice(index, index + batchSize);
+        output.push(...await Promise.all(batch.map(bucket => fetchYieldBucket(bucket, group))));
+    }
+    return output;
+}
+
+function ensureYieldDetailChart() {
+    if (yieldDetailChart || typeof Chart === 'undefined') return yieldDetailChart;
+    yieldDetailChart = new Chart(document.getElementById('yieldDetailChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [
+                {label: 'PV kWh', data: [], backgroundColor: 'rgba(245,182,74,0.82)', borderColor: 'rgba(255,255,255,0.58)', borderWidth: 1, borderRadius: 8},
+                {label: 'Pin sạc kWh', data: [], backgroundColor: 'rgba(120,201,181,0.78)', borderColor: 'rgba(255,255,255,0.48)', borderWidth: 1, borderRadius: 8},
+                {label: 'Pin xả kWh', data: [], backgroundColor: 'rgba(141,181,255,0.78)', borderColor: 'rgba(255,255,255,0.48)', borderWidth: 1, borderRadius: 8}
+            ]
+        },
+        options: glassChartOptions({
+            scales: {
+                x: {grid: {color: chartTheme().gridSoft}, ticks: {color: chartTheme().text, autoSkip: true, maxTicksLimit: 12, maxRotation: 0}},
+                y: {beginAtZero: true, grid: {color: chartTheme().grid}, ticks: {color: chartTheme().text}}
+            }
+        })
+    });
+    return yieldDetailChart;
+}
+
+function updateYieldDetailView(rows, group) {
+    const dataRows = rows.filter(row => row.hasData);
+    const totals = dataRows.reduce((sum, row) => ({
+        pv: sum.pv + valueOrZero(row.pv),
+        charge: sum.charge + valueOrZero(row.charge),
+        discharge: sum.discharge + valueOrZero(row.discharge)
+    }), {pv: 0, charge: 0, discharge: 0});
+    const peakPv = dataRows.reduce((max, row) => Math.max(max, valueOrZero(row.pv)), 0);
+
+    setText('yieldTotalPv', totals.pv.toFixed(2));
+    setText('yieldTotalCharge', totals.charge.toFixed(2));
+    setText('yieldTotalDischarge', totals.discharge.toFixed(2));
+    setText('yieldPeakPv', peakPv.toFixed(2));
+
+    const chart = ensureYieldDetailChart();
+    if (chart) {
+        chart.data.labels = rows.map(row => row.label);
+        chart.data.datasets[0].data = rows.map(row => row.hasData ? row.pv : null);
+        chart.data.datasets[1].data = rows.map(row => row.hasData ? row.charge : null);
+        chart.data.datasets[2].data = rows.map(row => row.hasData ? row.discharge : null);
+        chart.update('none');
+    }
+
+    const tbody = document.getElementById('yieldDetailTableBody');
+    if (tbody) {
+        tbody.innerHTML = dataRows.length
+            ? [...dataRows].reverse().map(row => (
+                `<tr><td>${row.label}</td><td>${formatValue(row.pv, 2)} kWh</td><td>${formatValue(row.charge, 2)} kWh</td><td>${formatValue(row.discharge, 2)} kWh</td></tr>`
+            )).join('')
+            : '<tr><td colspan="4">Không có dữ liệu trong khoảng đã chọn</td></tr>';
+    }
+
+    const status = document.getElementById('yieldStatus');
+    if (status) {
+        const unit = group === 'month' ? 'tháng' : 'ngày';
+        status.innerText = dataRows.length
+            ? `Đã tải ${dataRows.length}/${rows.length} mốc ${unit}. Bảng xếp mốc mới nhất lên trên.`
+            : 'Không có dữ liệu sản lượng trong khoảng đã chọn.';
+    }
+}
+
+async function loadYieldDetail() {
+    const status = document.getElementById('yieldStatus');
+    if (!supabaseReady || !supabaseClient) {
+        if (status) status.innerText = 'Supabase chưa sẵn sàng, không thể tải dữ liệu sản lượng.';
+        return;
+    }
+    const group = document.getElementById('yieldGroupSelect')?.value || 'day';
+    const range = readYieldRange();
+    if (!Number.isFinite(range.from) || !Number.isFinite(range.to) || range.to <= range.from) {
+        if (status) status.innerText = 'Khoảng thời gian không hợp lệ.';
+        return;
+    }
+    setYieldDateInputs(range);
+    const buckets = buildYieldBuckets(range, group);
+    if (status) status.innerText = `Đang tải ${buckets.length} mốc ${group === 'month' ? 'tháng' : 'ngày'} từ Supabase...`;
+    try {
+        const rows = await mapYieldBuckets(buckets, group);
+        updateYieldDetailView(rows, group);
+    } catch (err) {
+        if (status) status.innerText = `Không tải được dữ liệu sản lượng: ${err.message}`;
+        console.warn('Yield detail load failed:', err.message);
+    }
+}
+
+function openYieldDialog() {
+    const modal = document.getElementById('yieldModal');
+    if (!modal) return;
+    modal.hidden = false;
+    const preset = document.getElementById('yieldPresetSelect')?.value || '30d';
+    setYieldDateInputs(yieldRangeFromPreset(preset));
+    ensureYieldDetailChart();
+    loadYieldDetail();
+}
+
+function closeYieldDialog() {
+    const modal = document.getElementById('yieldModal');
+    if (modal) modal.hidden = true;
+}
+
+function setupYieldControls() {
+    const openButton = document.getElementById('openYieldDialog');
+    const closeButton = document.getElementById('closeYieldDialog');
+    const applyButton = document.getElementById('applyYieldRange');
+    const presetSelect = document.getElementById('yieldPresetSelect');
+    const groupSelect = document.getElementById('yieldGroupSelect');
+    const fromDate = document.getElementById('yieldFromDate');
+    const toDate = document.getElementById('yieldToDate');
+    const modal = document.getElementById('yieldModal');
+
+    if (openButton) openButton.addEventListener('click', openYieldDialog);
+    if (closeButton) closeButton.addEventListener('click', closeYieldDialog);
+    if (applyButton) applyButton.addEventListener('click', loadYieldDetail);
+    if (presetSelect) {
+        presetSelect.addEventListener('change', () => {
+            if (presetSelect.value !== 'custom') setYieldDateInputs(yieldRangeFromPreset(presetSelect.value));
+        });
+    }
+    if (groupSelect) {
+        groupSelect.addEventListener('change', () => {
+            if (modal && !modal.hidden) loadYieldDetail();
+        });
+    }
+    [fromDate, toDate].filter(Boolean).forEach(input => {
+        input.addEventListener('change', () => {
+            if (presetSelect) presetSelect.value = 'custom';
+        });
+    });
+    if (modal) {
+        modal.addEventListener('click', event => {
+            if (event.target === modal) closeYieldDialog();
+        });
+    }
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeYieldDialog();
+    });
+}
+
 function endOfLocalDay(timestamp = Date.now()) {
     const date = new Date(timestamp);
     date.setHours(23, 59, 59, 999);
@@ -1700,6 +1945,7 @@ function initCharts() {
     applyHistoryToLineCharts();
     updateOperationMonitor();
     setupChartControls();
+    setupYieldControls();
     updateChartTheme();
 }
 function updateCharts(options = {}) {

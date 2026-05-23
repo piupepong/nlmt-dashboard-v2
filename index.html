@@ -138,6 +138,7 @@
                         <div class="eyebrow">Yield</div>
                         <h2><i class="fas fa-chart-simple"></i> Sản lượng</h2>
                     </div>
+                    <button class="compact-action" id="openYieldDialog" type="button"><i class="fas fa-up-right-and-down-left-from-center"></i> Xem thêm</button>
                 </div>
                 <div class="stat-block">
                     <div class="stat-item"><div class="stat-label">Pin sạc hôm nay</div><div class="stat-number"><span id="dailyCharge">0</span> kWh</div></div>
@@ -340,6 +341,68 @@
     </section>
 
     <footer>NLMT Dashboard V2 | Web chỉ đọc realtime | Worker Armbian ghi dữ liệu Supabase</footer>
+
+    <div class="modal-backdrop" id="yieldModal" hidden>
+        <section class="yield-modal glass-card" role="dialog" aria-modal="true" aria-labelledby="yieldModalTitle">
+            <div class="section-head yield-modal-head">
+                <div>
+                    <div class="eyebrow">Yield Explorer</div>
+                    <h2 id="yieldModalTitle"><i class="fas fa-chart-simple"></i> Sản lượng nhiều ngày / nhiều tháng</h2>
+                </div>
+                <button class="compact-action icon-only" id="closeYieldDialog" type="button" aria-label="Đóng"><i class="fas fa-xmark"></i></button>
+            </div>
+
+            <div class="yield-toolbar">
+                <label class="history-field">Kiểu xem
+                    <select id="yieldGroupSelect">
+                        <option value="day" selected>Theo ngày</option>
+                        <option value="month">Theo tháng</option>
+                    </select>
+                </label>
+                <label class="history-field">Khoảng
+                    <select id="yieldPresetSelect">
+                        <option value="7d">7 ngày gần đây</option>
+                        <option value="30d" selected>30 ngày gần đây</option>
+                        <option value="90d">90 ngày gần đây</option>
+                        <option value="6m">6 tháng gần đây</option>
+                        <option value="12m">12 tháng gần đây</option>
+                        <option value="custom">Tùy chỉnh</option>
+                    </select>
+                </label>
+                <label class="history-field">Từ
+                    <input type="date" id="yieldFromDate">
+                </label>
+                <label class="history-field">Đến
+                    <input type="date" id="yieldToDate">
+                </label>
+                <button class="compact-action apply-action" id="applyYieldRange" type="button">Áp dụng</button>
+            </div>
+
+            <div class="yield-status" id="yieldStatus">Chọn khoảng thời gian để xem sản lượng.</div>
+
+            <div class="yield-summary-grid">
+                <div class="summary-tile"><span>PV tổng</span><strong><span id="yieldTotalPv">--</span> kWh</strong></div>
+                <div class="summary-tile"><span>Pin sạc</span><strong><span id="yieldTotalCharge">--</span> kWh</strong></div>
+                <div class="summary-tile"><span>Pin xả</span><strong><span id="yieldTotalDischarge">--</span> kWh</strong></div>
+                <div class="summary-tile"><span>PV cao nhất</span><strong><span id="yieldPeakPv">--</span> kWh</strong></div>
+            </div>
+
+            <div class="yield-detail-layout">
+                <div class="chart-box yield-detail-chart">
+                    <h4><i class="fas fa-chart-column"></i> Biểu đồ sản lượng</h4>
+                    <canvas id="yieldDetailChart" height="260"></canvas>
+                </div>
+                <div class="yield-table-wrap">
+                    <table class="data-table yield-table">
+                        <thead><tr><th>Mốc</th><th>PV</th><th>Pin sạc</th><th>Pin xả</th></tr></thead>
+                        <tbody id="yieldDetailTableBody">
+                            <tr><td colspan="4">Chưa có dữ liệu</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </div>
 </div>
 <script src="supabase-config.js"></script>
 <script src="app.js"></script>
