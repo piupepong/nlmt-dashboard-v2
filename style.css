@@ -1173,8 +1173,8 @@ footer {
     }
 
     .flow-canvas-wrap {
-        height: 820px;
-        min-height: 820px;
+        height: 720px;
+        min-height: 720px;
         border-radius: 24px;
         background:
             radial-gradient(circle at 22% 16%, rgba(255, 200, 87, 0.18), transparent 24%),
@@ -1193,9 +1193,9 @@ footer {
     }
 
     .floating-card {
-        width: clamp(128px, 39vw, 150px);
-        min-width: 128px;
-        padding: 10px 9px;
+        width: clamp(124px, 38vw, 146px);
+        min-width: 124px;
+        padding: 9px 8px;
         border-radius: 18px;
         text-align: left;
         background:
@@ -1205,14 +1205,14 @@ footer {
     }
 
     .fc-main {
-        margin-top: 9px;
-        font-size: 1.48rem;
+        margin-top: 8px;
+        font-size: 1.4rem;
         line-height: 1;
     }
 
     .fc-sub {
-        margin-top: 6px;
-        font-size: 0.72rem;
+        margin-top: 5px;
+        font-size: 0.69rem;
         line-height: 1.2;
     }
 
@@ -1230,8 +1230,8 @@ footer {
     .fc-data-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 5px;
-        margin-top: 7px;
+        gap: 4px;
+        margin-top: 6px;
     }
 
     .fc-data-grid div {
@@ -1249,19 +1249,19 @@ footer {
 
     .fc-meta {
         min-height: 24px;
-        margin-top: 7px;
+        margin-top: 6px;
         padding: 5px 8px;
         font-size: 0.64rem;
     }
 
     .fc-mini-bar {
         height: 8px;
-        margin-top: 8px;
+        margin-top: 7px;
     }
 
     .fc-runtime {
         min-height: 30px;
-        margin-top: 7px;
+        margin-top: 6px;
         padding: 6px 7px;
     }
 
@@ -1325,17 +1325,17 @@ footer {
     }
 
     .flow-canvas-wrap {
-        height: 860px;
-        min-height: 860px;
+        height: 700px;
+        min-height: 700px;
     }
 
     .floating-card {
-        width: clamp(124px, 38vw, 144px);
-        min-width: 124px;
+        width: clamp(118px, 37vw, 138px);
+        min-width: 118px;
     }
 
     .fc-main {
-        font-size: 1.34rem;
+        font-size: 1.26rem;
     }
 
     .fc-sub {

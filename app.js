@@ -683,7 +683,7 @@ let pulse = 0;
 function resizeFlow() {
     const container = canvas.parentElement;
     width = container.clientWidth;
-    const fallbackHeight = window.innerWidth <= 560 ? 860 : window.innerWidth <= 860 ? 820 : 560;
+    const fallbackHeight = window.innerWidth <= 560 ? 700 : window.innerWidth <= 860 ? 720 : 560;
     height = container.clientHeight || fallbackHeight;
     canvas.width = width;
     canvas.height = height;
@@ -695,11 +695,11 @@ window.addEventListener('resize', resizeFlow);
 function updateNodeCoords() {
     if (width <= 620) {
         nodes = {
-            pv: {x: width * 0.24, y: height * 0.14, label: 'PV', color: '#f5b64a'},
-            grid: {x: width * 0.76, y: height * 0.14, label: 'Bù lưới', color: '#8db5ff'},
-            inverter: {x: width * 0.5, y: height * 0.42, label: 'Inverter', color: '#ffffff'},
-            load: {x: width * 0.24, y: height * 0.68, label: 'Tải', color: '#78dce3'},
-            battery: {x: width * 0.76, y: height * 0.86, label: 'Pin', color: '#78c9b5'}
+            pv: {x: width * 0.25, y: height * 0.18, label: 'PV', color: '#f5b64a'},
+            grid: {x: width * 0.75, y: height * 0.18, label: 'Bù lưới', color: '#8db5ff'},
+            inverter: {x: width * 0.5, y: height * 0.45, label: 'Inverter', color: '#ffffff'},
+            load: {x: width * 0.25, y: height * 0.74, label: 'Tải', color: '#78dce3'},
+            battery: {x: width * 0.75, y: height * 0.74, label: 'Pin', color: '#78c9b5'}
         };
     } else {
         nodes = {
