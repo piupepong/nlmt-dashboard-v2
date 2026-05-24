@@ -895,7 +895,7 @@ drawFlow();
 // ========== 3. BIỂU ĐỒ ==========
 let dailyChart, monthlyChart, livePowerChart, powerMixChart, batteryTrendChart, temperatureChart, yieldDetailChart;
 let lastHistoryAt = 0;
-const HISTORY_STORAGE_KEY = 'nlmt-history-v1';
+const HISTORY_STORAGE_KEY = 'nlmt-history-v2';
 const HISTORY_SAMPLE_INTERVAL = 60 * 1000;
 const HISTORY_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 const MAX_CHART_POINTS = 520;
@@ -1233,6 +1233,7 @@ async function loadHistoryFromSupabase() {
         }
 
         historySamples = rows.map(rowToHistorySample);
+        saveHistory();
         applyHistoryToLineCharts();
         updateInsights();
         supabaseStatus = 'ok';
