@@ -35,7 +35,7 @@ Nen dung `SUPABASE_SERVICE_ROLE_KEY` tren Render, khong dua key nay vao frontend
 `ESPHOME_REFRESH_INTERVAL_MS` lam moi ket noi SSE truoc moi lan luu de worker khong ghi lap snapshot cu khi proxy/SSE bi dung yen.
 `STALE_EVENT_MAX_MS` chan ghi database neu ESPHome state qua cu; khi do worker reconnect va bo qua lan luu thay vi ghi sai.
 `HA_BASE_URL` va `HA_TOKEN` la tuy chon nhung nen bat tren Armbian LAN. Truoc khi luu, worker se doc snapshot hien tai tu Home Assistant cho cong suat, SOC, nhiet do va counter kWh. Cach nay giup chan viec ghi snapshot cu neu ket noi SSE/proxy bi dung yen.
-`LAST_ROW_REFRESH_INTERVAL_MS` lam moi dong moi nhat trong Supabase, giup worker khong tinh tiep tu bo nho cu sau khi backfill/import lai du lieu.
+Worker cung lam moi dong moi nhat trong Supabase truoc moi lan luu va khong cho counter kWh giam trong cung ngay/thang, giup worker khong tinh tiep tu bo nho cu sau khi backfill/import lai du lieu. Health endpoint co truong `version`; ban dung truong nay de xac nhan Armbian da chay dung code moi.
 
 ## Bao mat key
 

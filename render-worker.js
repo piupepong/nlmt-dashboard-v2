@@ -1,6 +1,7 @@
 import http from 'http';
 import https from 'https';
 
+const WORKER_VERSION = '2026-05-24-ha-snapshot-v2';
 const EVENT_URL = process.env.ESPHOME_EVENT_URL || 'https://piupepong.ddnsfree.com/events';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_TABLE = process.env.SUPABASE_TABLE || 'energy_samples';
@@ -340,6 +341,30 @@ function applyCalculatedProduction(row, previousRow) {
     return row;
 }
 
+function preserveCounter(column, row, previousRow, samePeriod, currentTs) {
+    const current = rowNumber(row, column);
+    const previous = rowNumber(previousRow, column);
+    const previousTs = previousRow && previousRow.ts ? new Date(previousRow.ts).getTime() : NaN;
+    if (!Number.isFinite(current) || !Number.isFinite(previous) || !Number.isFinite(previousTs)) return;
+    if (!samePeriod(previousTs, currentTs)) return;
+    if (current + 0.01 < previous) {
+        row[column] = previous;
+    }
+}
+
+function preserveProductionCounters(row, previousRow) {
+    const currentTs = row.ts ? new Date(row.ts).getTime() : NaN;
+    if (!Number.isFinite(currentTs) || !previousRow) return row;
+
+    preserveCounter('daily_pv_kwh', row, previousRow, sameLocalDay, currentTs);
+    preserveCounter('daily_charge_kwh', row, previousRow, sameLocalDay, currentTs);
+    preserveCounter('daily_discharge_kwh', row, previousRow, sameLocalDay, currentTs);
+    preserveCounter('month_pv_kwh', row, previousRow, sameLocalMonth, currentTs);
+    preserveCounter('month_charge_kwh', row, previousRow, sameLocalMonth, currentTs);
+    preserveCounter('month_discharge_kwh', row, previousRow, sameLocalMonth, currentTs);
+    return row;
+}
+
 function omitNullValues(row) {
     return Object.fromEntries(Object.entries(row).filter(([, value]) => value !== null && value !== undefined));
 }
@@ -555,8 +580,11 @@ async function saveSampleToSupabase() {
     saving = true;
     try {
         await refreshProductionFromHomeAssistant();
-        await refreshLastPersistedRowFromSupabase();
-        const fullRow = applyCalculatedProduction(historySampleToRow(createHistorySample()), lastPersistedRow);
+        await refreshLastPersistedRowFromSupabase(true);
+        const fullRow = preserveProductionCounters(
+            applyCalculatedProduction(historySampleToRow(createHistorySample()), lastPersistedRow),
+            lastPersistedRow
+        );
         const row = omitNullValues(fullRow);
         const response = await requestText(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?on_conflict=device_id,ts`, {
             method: 'POST',
@@ -688,6 +716,7 @@ http.createServer((req, res) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify({
         ok: true,
+        version: WORKER_VERSION,
         connected,
         lastEventAt,
         lastEventAgeMs: eventAgeMs(),
