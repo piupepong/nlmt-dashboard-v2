@@ -1,7 +1,7 @@
 import http from 'http';
 import https from 'https';
 
-const WORKER_VERSION = '2026-05-24-ha-snapshot-v2';
+const WORKER_VERSION = '2026-05-24-strict-sensors-v3';
 const EVENT_URL = process.env.ESPHOME_EVENT_URL || 'https://piupepong.ddnsfree.com/events';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_TABLE = process.env.SUPABASE_TABLE || 'energy_samples';
@@ -44,6 +44,26 @@ const sensorMap = {
     'sensor-pin_xa_hom_nay': 'dailyDischarge',
     'sensor-pv_hom_nay': 'dailyPv',
     'sensor-san_luong_pv_hom_nay': 'dailyPv',
+    'sensor.nangluongmattroi_cong_suat_pv': 'pv',
+    'sensor.nangluongmattroi_cong_suat_tai': 'load',
+    'sensor.nangluongmattroi_can_bang_cong_suat': 'balancePower',
+    'sensor.nangluongmattroi_cong_suat_luoi': 'grid',
+    'sensor.nangluongmattroi_dien_ap_pv': 'pvVoltage',
+    'sensor.nangluongmattroi_dong_pv': 'pvCurrent',
+    'sensor.nangluongmattroi_dien_ap_pin_inverter': 'battVoltage',
+    'sensor.nangluongmattroi_jk_soc': 'soc',
+    'sensor.nangluongmattroi_jk_dong_pin': 'jkCurrent',
+    'sensor.nangluongmattroi_jk_cong_suat_pin': 'jkPower',
+    'sensor.nangluongmattroi_nhiet_do_inverter': 'invTemp',
+    'sensor.nangluongmattroi_tai_phan_tram': 'loadPercent',
+    'sensor.nangluongmattroi_tai_bieu_kien': 'apparent',
+    'sensor.nangluongmattroi_tan_so_output': 'freq',
+    'sensor.nangluongmattroi_jk_nhiet_do_mos': 'tempMos',
+    'sensor.nangluongmattroi_jk_nhiet_do_1': 'tempMos',
+    'sensor.nangluongmattroi_jk_nhiet_do_2': 'tempMos',
+    'sensor.nangluongmattroi_jk_lech_ap_cell': 'cellDiff',
+    'sensor.nangluongmattroi_dien_ap_output': 'outputVoltage',
+    'sensor.nangluongmattroi_dien_ap_luoi': 'gridVoltage',
     'sensor.nangluongmattroi_pin_sac_ngay': 'dailyCharge',
     'sensor.nangluongmattroi_pin_xa_ngay': 'dailyDischarge',
     'sensor.nangluongmattroi_pv_ngay': 'dailyPv',
@@ -150,6 +170,7 @@ function resolveSensorKey(id) {
     if (sensorMap[id]) return sensorMap[id];
     const normalized = normalizeSensorId(id);
     if (sensorMap[normalized]) return sensorMap[normalized];
+    if (normalized.includes('cong_suat_pin_flow')) return null;
     if (normalized.includes('cong_suat_pv') || normalized.includes('pv_power')) return 'pv';
     if (normalized.includes('cong_suat_tai') || normalized.includes('load_power')) return 'load';
     if (normalized.includes('can_bang_cong_suat')) return 'balancePower';
@@ -158,7 +179,7 @@ function resolveSensorKey(id) {
     if (normalized.includes('dien_ap_pv') || normalized.includes('pv_voltage')) return 'pvVoltage';
     if (normalized.includes('dong_pv') || normalized.includes('pv_current')) return 'pvCurrent';
     if (normalized.includes('dien_ap_pin') || normalized.includes('battery_voltage')) return 'battVoltage';
-    if (normalized.includes('jk_soc') || normalized.endsWith('_soc')) return 'soc';
+    if (normalized === 'sensor_jk_soc' || normalized.endsWith('_jk_soc')) return 'soc';
     if (normalized.includes('jk_dong_pin') || normalized.includes('battery_current')) return 'jkCurrent';
     if (normalized.includes('nhiet_do_inverter') || normalized.includes('inverter_temp')) return 'invTemp';
     if (normalized.includes('jk_nhiet_do_mos') || normalized.includes('jk_nhiet_do_1') || normalized.includes('jk_nhiet_do_2') || normalized.includes('mos_temp')) return 'tempMos';
@@ -181,26 +202,36 @@ function resolveSensorKey(id) {
     return null;
 }
 
-function applySensorValue(key, id, numericValue) {
+function normalizeSensorValue(key, numericValue, unit) {
+    if (!Number.isFinite(numericValue)) return numericValue;
+    const unitText = String(unit || '').toLowerCase();
+    if ((key === 'invTemp' || key === 'tempMos') && unitText.includes('f')) {
+        return (numericValue - 32) * 5 / 9;
+    }
+    return numericValue;
+}
+
+function applySensorValue(key, id, numericValue, unit = '') {
     if (!Number.isFinite(numericValue)) {
         realData[key] = null;
         return;
     }
+    const value = normalizeSensorValue(key, numericValue, unit);
 
     if (productionKeys.has(key)) {
         productionUpdatedAt[key] = Date.now();
     }
 
     if (key === 'tempMos') {
-        tempMosSources[normalizeSensorId(id)] = numericValue;
+        tempMosSources[normalizeSensorId(id)] = value;
         const values = Object.values(tempMosSources).filter(Number.isFinite);
-        realData.tempMos = values.length ? Math.max(...values) : numericValue;
+        realData.tempMos = values.length ? Math.max(...values) : value;
         return;
     }
 
     if (key === 'jkPower') {
-        realData.jkPower = numericValue;
-        realData.bat = numericValue;
+        realData.jkPower = value;
+        realData.bat = value;
         return;
     }
 
@@ -208,7 +239,7 @@ function applySensorValue(key, id, numericValue) {
         return;
     }
 
-    realData[key] = numericValue;
+    realData[key] = value;
 }
 
 function numberOrNull(value, digits = null) {
@@ -480,6 +511,7 @@ async function refreshProductionFromHomeAssistant(force = false) {
                 key,
                 entityId: state.entity_id,
                 value: numericValue,
+                unit: state.attributes && state.attributes.unit_of_measurement ? state.attributes.unit_of_measurement : '',
                 score: scoreProductionState(state, key)
             };
             const current = bestByKey.get(key);
@@ -488,7 +520,7 @@ async function refreshProductionFromHomeAssistant(force = false) {
 
         const now = Date.now();
         for (const [key, candidate] of bestByKey) {
-            applySensorValue(key, candidate.entityId, candidate.value);
+            applySensorValue(key, candidate.entityId, candidate.value, candidate.unit);
             if (productionKeys.has(key)) productionUpdatedAt[key] = now;
         }
         lastHaRefreshAt = now;
@@ -632,7 +664,12 @@ function handleSseEvent(type, data) {
         const key = resolveSensorKey(id);
         if (!key) return;
         const numericValue = parseFloat(raw);
-        applySensorValue(key, id, numericValue);
+        const unit = event.uom !== undefined
+            ? event.uom
+            : (event.unit_of_measurement !== undefined
+                ? event.unit_of_measurement
+                : (event.unit !== undefined ? event.unit : event.state));
+        applySensorValue(key, id, numericValue, unit);
         connected = true;
         lastEventAt = Date.now();
         scheduleInitialSave();

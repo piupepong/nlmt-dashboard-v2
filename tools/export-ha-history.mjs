@@ -86,6 +86,7 @@ const exactMap = {
     'sensor.nangluongmattroi_jk_nhiet_do_2': 'tempMos',
     'sensor.nangluongmattroi_jk_lech_ap_cell': 'cellDiff',
     'sensor.nangluongmattroi_dien_ap_output': 'outputVoltage',
+    'sensor.nangluongmattroi_dien_ap_luoi': 'gridVoltage',
     'sensor.nangluongmattroi_pin_sac_ngay': 'dailyCharge',
     'sensor.nangluongmattroi_pin_xa_ngay': 'dailyDischarge',
     'sensor.nangluongmattroi_pv_ngay': 'dailyPv',
@@ -109,12 +110,13 @@ function resolveKey(state) {
     if (text.includes('cong_suat_pv') || text.includes('pv_power')) return 'pv';
     if (text.includes('cong_suat_tai') || text.includes('load_power')) return 'load';
     if (text.includes('can_bang_cong_suat')) return 'balancePower';
+    if (text.includes('cong_suat_pin_flow')) return null;
     if (text.includes('jk_cong_suat_pin')) return 'jkPower';
     if (text.includes('cong_suat_luoi') || text.includes('grid_power')) return 'grid';
     if (text.includes('dien_ap_pv') || text.includes('pv_voltage')) return 'pvVoltage';
     if (text.includes('dong_pv') || text.includes('pv_current')) return 'pvCurrent';
     if (text.includes('dien_ap_pin') || text.includes('battery_voltage')) return 'battVoltage';
-    if (text.includes('jk_soc') || text.endsWith('_soc')) return 'soc';
+    if (text.includes('jk_soc')) return 'soc';
     if (text.includes('jk_dong_pin') || text.includes('battery_current')) return 'jkCurrent';
     if (text.includes('nhiet_do_inverter') || text.includes('inverter_temp')) return 'invTemp';
     if (text.includes('jk_nhiet_do_mos') || text.includes('jk_nhiet_do_1') || text.includes('jk_nhiet_do_2') || text.includes('mos_temp')) return 'tempMos';
