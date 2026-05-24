@@ -149,6 +149,24 @@ function resolveSensorKey(id) {
     if (sensorMap[id]) return sensorMap[id];
     const normalized = normalizeSensorId(id);
     if (sensorMap[normalized]) return sensorMap[normalized];
+    if (normalized.includes('cong_suat_pv') || normalized.includes('pv_power')) return 'pv';
+    if (normalized.includes('cong_suat_tai') || normalized.includes('load_power')) return 'load';
+    if (normalized.includes('can_bang_cong_suat')) return 'balancePower';
+    if (normalized.includes('jk_cong_suat_pin')) return 'jkPower';
+    if (normalized.includes('cong_suat_luoi') || normalized.includes('grid_power')) return 'grid';
+    if (normalized.includes('dien_ap_pv') || normalized.includes('pv_voltage')) return 'pvVoltage';
+    if (normalized.includes('dong_pv') || normalized.includes('pv_current')) return 'pvCurrent';
+    if (normalized.includes('dien_ap_pin') || normalized.includes('battery_voltage')) return 'battVoltage';
+    if (normalized.includes('jk_soc') || normalized.endsWith('_soc')) return 'soc';
+    if (normalized.includes('jk_dong_pin') || normalized.includes('battery_current')) return 'jkCurrent';
+    if (normalized.includes('nhiet_do_inverter') || normalized.includes('inverter_temp')) return 'invTemp';
+    if (normalized.includes('jk_nhiet_do_mos') || normalized.includes('jk_nhiet_do_1') || normalized.includes('jk_nhiet_do_2') || normalized.includes('mos_temp')) return 'tempMos';
+    if (normalized.includes('tai_phan_tram') || normalized.includes('load_percent')) return 'loadPercent';
+    if (normalized.includes('tai_bieu_kien') || normalized.includes('apparent')) return 'apparent';
+    if (normalized.includes('tan_so_output') || normalized.includes('output_frequency')) return 'freq';
+    if (normalized.includes('lech_ap_cell') || normalized.includes('cell_diff')) return 'cellDiff';
+    if (normalized.includes('dien_ap_output') || normalized.includes('output_voltage')) return 'outputVoltage';
+    if (normalized.includes('dien_ap_luoi') || normalized.includes('grid_voltage')) return 'gridVoltage';
     if (normalized.includes('ngay') || normalized.includes('hom_nay') || normalized.includes('homnay') || normalized.includes('today') || normalized.includes('daily')) {
         if (normalized.includes('sac') || normalized.includes('charge')) return 'dailyCharge';
         if (normalized.includes('xa') || normalized.includes('discharge')) return 'dailyDischarge';
@@ -280,6 +298,11 @@ function scoreProductionState(state, key) {
     let score = sensorMap[entityId] === key ? 100 : 0;
     if (entityId.includes('nangluongmattroi')) score += 20;
     if (unit.includes('kwh')) score += 30;
+    if (['pv', 'load', 'grid', 'jkPower'].includes(key) && unit === 'w') score += 30;
+    if (['soc', 'loadPercent'].includes(key) && unit === '%') score += 20;
+    if (['battVoltage', 'pvVoltage', 'outputVoltage', 'gridVoltage', 'cellDiff'].includes(key) && unit === 'v') score += 20;
+    if (['pvCurrent', 'jkCurrent'].includes(key) && unit === 'a') score += 20;
+    if (['invTemp', 'tempMos'].includes(key) && (unit.includes('c') || unit.includes('f'))) score += 20;
     return score;
 }
 
@@ -424,11 +447,12 @@ async function refreshProductionFromHomeAssistant(force = false) {
         const bestByKey = new Map();
         for (const state of states || []) {
             const key = resolveSensorKey(state.entity_id);
-            if (!productionKeys.has(key)) continue;
+            if (!key || key === 'balancePower') continue;
             const numericValue = Number.parseFloat(state.state);
             if (!Number.isFinite(numericValue)) continue;
             const candidate = {
                 key,
+                entityId: state.entity_id,
                 value: numericValue,
                 score: scoreProductionState(state, key)
             };
@@ -438,13 +462,13 @@ async function refreshProductionFromHomeAssistant(force = false) {
 
         const now = Date.now();
         for (const [key, candidate] of bestByKey) {
-            realData[key] = candidate.value;
-            productionUpdatedAt[key] = now;
+            applySensorValue(key, candidate.entityId, candidate.value);
+            if (productionKeys.has(key)) productionUpdatedAt[key] = now;
         }
         lastHaRefreshAt = now;
         lastHaRefreshError = null;
         const updated = bestByKey.size;
-        if (updated) console.log(`Refreshed ${updated} production counters from Home Assistant.`);
+        if (updated) console.log(`Refreshed ${updated} dashboard states from Home Assistant.`);
         return updated > 0;
     } catch (err) {
         lastHaRefreshAt = Date.now();
