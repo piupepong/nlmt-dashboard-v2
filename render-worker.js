@@ -1,7 +1,7 @@
 import http from 'http';
 import https from 'https';
 
-const WORKER_VERSION = '2026-05-24-strict-sensors-v3';
+const WORKER_VERSION = '2026-05-24-strict-sensors-v4';
 const EVENT_URL = process.env.ESPHOME_EVENT_URL || 'https://piupepong.ddnsfree.com/events';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_TABLE = process.env.SUPABASE_TABLE || 'energy_samples';
@@ -373,7 +373,8 @@ function applyCalculatedProduction(row, previousRow) {
     return row;
 }
 
-function preserveCounter(column, row, previousRow, samePeriod, currentTs) {
+function preserveCounter(column, row, previousRow, samePeriod, currentTs, sensorKey = null) {
+    if (sensorKey && hasFreshProductionSensor(sensorKey, currentTs)) return;
     const current = rowNumber(row, column);
     const previous = rowNumber(previousRow, column);
     const previousTs = previousRow && previousRow.ts ? new Date(previousRow.ts).getTime() : NaN;
@@ -388,12 +389,12 @@ function preserveProductionCounters(row, previousRow) {
     const currentTs = row.ts ? new Date(row.ts).getTime() : NaN;
     if (!Number.isFinite(currentTs) || !previousRow) return row;
 
-    preserveCounter('daily_pv_kwh', row, previousRow, sameLocalDay, currentTs);
-    preserveCounter('daily_charge_kwh', row, previousRow, sameLocalDay, currentTs);
-    preserveCounter('daily_discharge_kwh', row, previousRow, sameLocalDay, currentTs);
-    preserveCounter('month_pv_kwh', row, previousRow, sameLocalMonth, currentTs);
-    preserveCounter('month_charge_kwh', row, previousRow, sameLocalMonth, currentTs);
-    preserveCounter('month_discharge_kwh', row, previousRow, sameLocalMonth, currentTs);
+    preserveCounter('daily_pv_kwh', row, previousRow, sameLocalDay, currentTs, 'dailyPv');
+    preserveCounter('daily_charge_kwh', row, previousRow, sameLocalDay, currentTs, 'dailyCharge');
+    preserveCounter('daily_discharge_kwh', row, previousRow, sameLocalDay, currentTs, 'dailyDischarge');
+    preserveCounter('month_pv_kwh', row, previousRow, sameLocalMonth, currentTs, 'monthPv');
+    preserveCounter('month_charge_kwh', row, previousRow, sameLocalMonth, currentTs, 'monthCharge');
+    preserveCounter('month_discharge_kwh', row, previousRow, sameLocalMonth, currentTs, 'monthDischarge');
     return row;
 }
 
