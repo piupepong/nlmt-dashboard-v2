@@ -1377,6 +1377,11 @@ function getChartHistory() {
     return smoothChartSamples(getSelectedHistory());
 }
 
+function chartGridValue(value) {
+    if (!Number.isFinite(value)) return null;
+    return value > 0 ? -value : value;
+}
+
 function formatHistoryLabel(timestamp, spanMs) {
     const date = new Date(timestamp);
     if (spanMs > 36 * 60 * 60 * 1000) {
@@ -1399,7 +1404,7 @@ function applyHistoryToLineCharts() {
         livePowerChart.data.datasets[0].data = samples.map(sample => sample.pv);
         livePowerChart.data.datasets[1].data = samples.map(sample => sample.load);
         livePowerChart.data.datasets[2].data = samples.map(sample => sample.bat);
-        livePowerChart.data.datasets[3].data = samples.map(sample => sample.grid);
+        livePowerChart.data.datasets[3].data = samples.map(sample => chartGridValue(sample.grid));
         livePowerChart.update('none');
     }
     if (batteryTrendChart) {
