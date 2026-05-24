@@ -294,7 +294,8 @@ function hasFreshProductionSensor(key, currentTs) {
 }
 
 function scoreProductionState(state, key) {
-    const unit = String(state.attributes?.unit_of_measurement || '').toLowerCase();
+    const attributes = state && state.attributes ? state.attributes : {};
+    const unit = String(attributes.unit_of_measurement || '').toLowerCase();
     const entityId = String(state.entity_id || '');
     let score = sensorMap[entityId] === key ? 100 : 0;
     if (entityId.includes('nangluongmattroi')) score += 20;
@@ -570,7 +571,8 @@ async function saveSampleToSupabase() {
     await seedLatestFromSupabase();
     if (!hasRealtimeData()) return;
     if (!hasFreshEventData()) {
-        const message = `Skip save: ESPHome state is stale (${eventAgeMs() ?? 'never'} ms old).`;
+        const age = eventAgeMs();
+        const message = `Skip save: ESPHome state is stale (${Number.isFinite(age) ? age : 'never'} ms old).`;
         lastSaveError = message;
         console.warn(message);
         closeEventsConnection('stale state before save');
