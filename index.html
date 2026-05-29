@@ -144,9 +144,11 @@
                     <div class="stat-item"><div class="stat-label">Pin sạc hôm nay</div><div class="stat-number"><span id="dailyCharge">0</span> kWh</div></div>
                     <div class="stat-item"><div class="stat-label">Pin xả hôm nay</div><div class="stat-number"><span id="dailyDischarge">0</span> kWh</div></div>
                     <div class="stat-item primary-metric"><div class="stat-label">PV hôm nay</div><div class="stat-number"><span id="dailyPv">0</span> kWh</div></div>
+                    <div class="stat-item"><div class="stat-label">Bù lưới hôm nay</div><div class="stat-number"><span id="dailyGridImport">0</span> kWh</div></div>
                     <div class="stat-item"><div class="stat-label">Pin sạc tháng</div><div class="stat-number"><span id="monthCharge">0</span> kWh</div></div>
                     <div class="stat-item"><div class="stat-label">Pin xả tháng</div><div class="stat-number"><span id="monthDischarge">0</span> kWh</div></div>
                     <div class="stat-item"><div class="stat-label">PV tháng</div><div class="stat-number"><span id="monthPv">0</span> kWh</div></div>
+                    <div class="stat-item"><div class="stat-label">Bù lưới tháng</div><div class="stat-number"><span id="monthGridImport">0</span> kWh</div></div>
                 </div>
             </section>
 
@@ -384,6 +386,7 @@
                 <div class="summary-tile"><span>PV tổng</span><strong><span id="yieldTotalPv">--</span> kWh</strong></div>
                 <div class="summary-tile"><span>Pin sạc</span><strong><span id="yieldTotalCharge">--</span> kWh</strong></div>
                 <div class="summary-tile"><span>Pin xả</span><strong><span id="yieldTotalDischarge">--</span> kWh</strong></div>
+                <div class="summary-tile"><span>Bù lưới</span><strong><span id="yieldTotalGridImport">--</span> kWh</strong></div>
                 <div class="summary-tile"><span>PV cao nhất</span><strong><span id="yieldPeakPv">--</span> kWh</strong></div>
             </div>
 
@@ -394,9 +397,9 @@
                 </div>
                 <div class="yield-table-wrap">
                     <table class="data-table yield-table">
-                        <thead><tr><th>Mốc</th><th>PV</th><th>Pin sạc</th><th>Pin xả</th></tr></thead>
+                        <thead><tr><th>Mốc</th><th>PV</th><th>Pin sạc</th><th>Pin xả</th><th>Bù lưới</th></tr></thead>
                         <tbody id="yieldDetailTableBody">
-                            <tr><td colspan="4">Chưa có dữ liệu</td></tr>
+                            <tr><td colspan="5">Chưa có dữ liệu</td></tr>
                         </tbody>
                     </table>
                 </div>
