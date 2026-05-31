@@ -1,7 +1,7 @@
 import http from 'http';
 import https from 'https';
 
-const WORKER_VERSION = '2026-05-28-battery-counter-v5';
+const WORKER_VERSION = '2026-05-31-daily-production-v6';
 const EVENT_URL = process.env.ESPHOME_EVENT_URL || 'https://piupepong.ddnsfree.com/events';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_TABLE = process.env.SUPABASE_TABLE || 'energy_samples';
@@ -371,15 +371,27 @@ function applyCalculatedProduction(row, previousRow) {
 
     const calculatedDailyCharge = roundedKwh(previousDailyCharge + chargeDelta);
     const calculatedDailyDischarge = roundedKwh(previousDailyDischarge + dischargeDelta);
+    const calculatedDailyPv = roundedKwh(previousDailyPv + pvDelta);
     const calculatedMonthCharge = roundedKwh(previousMonthCharge + chargeDelta);
     const calculatedMonthDischarge = roundedKwh(previousMonthDischarge + dischargeDelta);
+    const calculatedMonthPv = roundedKwh(previousMonthPv + pvDelta);
 
-    if (!hasFreshProductionSensor('dailyPv', currentTs)) row.daily_pv_kwh = roundedKwh(previousDailyPv + pvDelta);
-    if (!hasFreshProductionSensor('dailyCharge', currentTs)) row.daily_charge_kwh = calculatedDailyCharge;
-    else row.daily_charge_kwh = preferHigherCounter(rowNumber(row, 'daily_charge_kwh'), calculatedDailyCharge);
-    if (!hasFreshProductionSensor('dailyDischarge', currentTs)) row.daily_discharge_kwh = calculatedDailyDischarge;
-    else row.daily_discharge_kwh = preferHigherCounter(rowNumber(row, 'daily_discharge_kwh'), calculatedDailyDischarge);
-    if (!hasFreshProductionSensor('monthPv', currentTs)) row.month_pv_kwh = roundedKwh(previousMonthPv + pvDelta);
+    if (sameDay && hasFreshProductionSensor('dailyPv', currentTs)) {
+        const dailyPvSensor = rowNumber(row, 'daily_pv_kwh');
+        row.daily_pv_kwh = Number.isFinite(dailyPvSensor) ? roundedKwh(dailyPvSensor) : calculatedDailyPv;
+    } else {
+        row.daily_pv_kwh = calculatedDailyPv;
+    }
+
+    row.daily_charge_kwh = calculatedDailyCharge;
+    row.daily_discharge_kwh = calculatedDailyDischarge;
+
+    if (sameMonth && hasFreshProductionSensor('monthPv', currentTs)) {
+        const monthPvSensor = rowNumber(row, 'month_pv_kwh');
+        row.month_pv_kwh = Number.isFinite(monthPvSensor) ? roundedKwh(monthPvSensor) : calculatedMonthPv;
+    } else {
+        row.month_pv_kwh = calculatedMonthPv;
+    }
     if (!hasFreshProductionSensor('monthCharge', currentTs)) row.month_charge_kwh = calculatedMonthCharge;
     else row.month_charge_kwh = preferHigherCounter(rowNumber(row, 'month_charge_kwh'), calculatedMonthCharge);
     if (!hasFreshProductionSensor('monthDischarge', currentTs)) row.month_discharge_kwh = calculatedMonthDischarge;
@@ -404,9 +416,9 @@ function preserveProductionCounters(row, previousRow) {
     const currentTs = row.ts ? new Date(row.ts).getTime() : NaN;
     if (!Number.isFinite(currentTs) || !previousRow) return row;
 
-    preserveCounter('daily_pv_kwh', row, previousRow, sameLocalDay, currentTs, 'dailyPv');
-    preserveCounter('daily_charge_kwh', row, previousRow, sameLocalDay, currentTs, 'dailyCharge');
-    preserveCounter('daily_discharge_kwh', row, previousRow, sameLocalDay, currentTs, 'dailyDischarge');
+    preserveCounter('daily_pv_kwh', row, previousRow, sameLocalDay, currentTs);
+    preserveCounter('daily_charge_kwh', row, previousRow, sameLocalDay, currentTs);
+    preserveCounter('daily_discharge_kwh', row, previousRow, sameLocalDay, currentTs);
     preserveCounter('month_pv_kwh', row, previousRow, sameLocalMonth, currentTs, 'monthPv');
     preserveCounter('month_charge_kwh', row, previousRow, sameLocalMonth, currentTs, 'monthCharge');
     preserveCounter('month_discharge_kwh', row, previousRow, sameLocalMonth, currentTs, 'monthDischarge');

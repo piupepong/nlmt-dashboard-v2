@@ -1204,9 +1204,9 @@ function applyEstimatedProduction(samples, rows = []) {
     const monthTotals = estimateProductionFromSamples(samples, monthStart, now);
 
     estimatedProduction = {
-        dailyCharge: latestFinite(rows, 'daily_charge_kwh', todayStart) ?? todayTotals.charge,
-        dailyDischarge: latestFinite(rows, 'daily_discharge_kwh', todayStart) ?? todayTotals.discharge,
-        dailyPv: latestFinite(rows, 'daily_pv_kwh', todayStart) ?? todayTotals.pv,
+        dailyCharge: todayTotals.charge ?? latestFinite(rows, 'daily_charge_kwh', todayStart),
+        dailyDischarge: todayTotals.discharge ?? latestFinite(rows, 'daily_discharge_kwh', todayStart),
+        dailyPv: todayTotals.pv ?? latestFinite(rows, 'daily_pv_kwh', todayStart),
         dailyGridImport: todayTotals.gridImport,
         monthCharge: latestFinite(rows, 'month_charge_kwh') ?? monthTotals.charge,
         monthDischarge: latestFinite(rows, 'month_discharge_kwh') ?? monthTotals.discharge,
@@ -1534,43 +1534,16 @@ function buildYieldBuckets(range, group) {
     return buckets;
 }
 
-function yieldValueFromRow(row, group, kind) {
-    const prefix = group === 'month' ? 'month' : 'daily';
-    const column = {
-        charge: `${prefix}_charge_kwh`,
-        discharge: `${prefix}_discharge_kwh`,
-        pv: `${prefix}_pv_kwh`
-    }[kind];
-    const value = row ? Number(row[column]) : NaN;
-    return Number.isFinite(value) ? value : 0;
-}
-
-function estimateGridImportForRange(samples, from, to) {
-    const sorted = samples
-        .filter(sample => Number.isFinite(sample.ts))
-        .sort((a, b) => a.ts - b.ts);
-    let gridWh = 0;
-    for (let index = 0; index < sorted.length - 1; index++) {
-        const current = sorted[index];
-        const next = sorted[index + 1];
-        const segmentStart = Math.max(current.ts, from);
-        const segmentEnd = Math.min(next.ts, to);
-        if (segmentEnd <= segmentStart) continue;
-        const hours = Math.min((segmentEnd - segmentStart) / 3600000, 0.25);
-        if (Number.isFinite(current.grid) && current.grid > 0) gridWh += current.grid * hours;
-    }
-    return roundKwh(gridWh / 1000) || 0;
-}
-
-async function fetchGridSamplesForYield(range) {
+async function fetchYieldSamplesForRange(range) {
     const rows = [];
     const pageSize = 1000;
+    const paddingMs = 15 * 60 * 1000;
     for (let offset = 0; offset < 120000; offset += pageSize) {
         const {data, error} = await supabaseClient
             .from(SUPABASE_TABLE)
-            .select('ts,grid_w')
+            .select('ts,pv_w,battery_w,grid_w,battery_voltage_v,jk_current_a')
             .eq('device_id', DEVICE_ID)
-            .gte('ts', new Date(range.from).toISOString())
+            .gte('ts', new Date(range.from - paddingMs).toISOString())
             .lte('ts', new Date(range.to).toISOString())
             .order('ts', {ascending: true})
             .range(offset, offset + pageSize - 1);
@@ -1580,48 +1553,26 @@ async function fetchGridSamplesForYield(range) {
     }
     return rows.map(row => ({
         ts: new Date(row.ts).getTime(),
+        pv: row.pv_w === null ? null : Number(row.pv_w),
+        bat: rowBatteryPower(row),
         grid: row.grid_w === null ? null : Number(row.grid_w)
     }));
 }
 
-function attachGridImportToYieldRows(rows, gridSamples) {
-    return rows.map(row => ({
-        ...row,
-        gridImport: estimateGridImportForRange(gridSamples, row.from, row.to)
-    }));
-}
-
-async function fetchYieldBucket(bucket, group) {
-    const prefix = group === 'month' ? 'month' : 'daily';
-    const { data, error } = await supabaseClient
-        .from(SUPABASE_TABLE)
-        .select(`ts,${prefix}_charge_kwh,${prefix}_discharge_kwh,${prefix}_pv_kwh`)
-        .eq('device_id', DEVICE_ID)
-        .gte('ts', new Date(bucket.from).toISOString())
-        .lte('ts', new Date(bucket.to).toISOString())
-        .order('ts', { ascending: false })
-        .limit(1);
-    if (error) throw error;
-    const row = data?.[0] || null;
-    return {
-        ...bucket,
-        ts: row ? new Date(row.ts).getTime() : bucket.from,
-        charge: roundKwh(yieldValueFromRow(row, group, 'charge')),
-        discharge: roundKwh(yieldValueFromRow(row, group, 'discharge')),
-        pv: roundKwh(yieldValueFromRow(row, group, 'pv')),
-        gridImport: 0,
-        hasData: Boolean(row)
-    };
-}
-
-async function mapYieldBuckets(buckets, group) {
-    const output = [];
-    const batchSize = 8;
-    for (let index = 0; index < buckets.length; index += batchSize) {
-        const batch = buckets.slice(index, index + batchSize);
-        output.push(...await Promise.all(batch.map(bucket => fetchYieldBucket(bucket, group))));
-    }
-    return output;
+function mapYieldBuckets(buckets, samples) {
+    return buckets.map(bucket => {
+        const totals = estimateProductionFromSamples(samples, bucket.from, bucket.to);
+        const hasSample = samples.some(sample => sample.ts >= bucket.from && sample.ts <= bucket.to);
+        return {
+            ...bucket,
+            ts: bucket.from,
+            charge: totals.charge ?? 0,
+            discharge: totals.discharge ?? 0,
+            pv: totals.pv ?? 0,
+            gridImport: totals.gridImport ?? 0,
+            hasData: hasSample && [totals.charge, totals.discharge, totals.pv, totals.gridImport].some(Number.isFinite)
+        };
+    });
 }
 
 function ensureYieldDetailChart() {
@@ -1707,11 +1658,8 @@ async function loadYieldDetail() {
     const buckets = buildYieldBuckets(range, group);
     if (status) status.innerText = `Đang tải ${buckets.length} mốc ${group === 'month' ? 'tháng' : 'ngày'} từ Supabase...`;
     try {
-        const [productionRows, gridSamples] = await Promise.all([
-            mapYieldBuckets(buckets, group),
-            fetchGridSamplesForYield(range)
-        ]);
-        const rows = attachGridImportToYieldRows(productionRows, gridSamples);
+        const samples = await fetchYieldSamplesForRange(range);
+        const rows = mapYieldBuckets(buckets, samples);
         updateYieldDetailView(rows, group);
     } catch (err) {
         if (status) status.innerText = `Không tải được dữ liệu sản lượng: ${err.message}`;
