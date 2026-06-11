@@ -15,7 +15,7 @@ services:
       - key: NODE_VERSION
         value: 20
       - key: ESPHOME_EVENT_URL
-        value: https://piupepong.ddnsfree.com/events
+        value: https://esphome.piupepong.ddnsfree.com/events
       - key: SUPABASE_URL
         value: https://iopqamrtcuxntcojtqeu.supabase.co
       - key: SUPABASE_TABLE

@@ -639,7 +639,55 @@ function updateFloatingCards() {
     setText('invMetaFloat', Number.isFinite(realData.loadPercent) ? `Tải ${formatValue(realData.loadPercent)}%` : 'Nhiệt độ');
 }
 
+function updateOverviewSummary() {
+    const pv = realData.pv;
+    const load = realData.load;
+    const bat = realData.bat;
+    const grid = realData.grid;
+    const soc = realData.soc;
+    const maxTemp = maxValue([realData.invTemp, realData.tempMos].filter(Number.isFinite));
+    const loadPercent = realData.loadPercent;
+
+    if (Number.isFinite(pv) && Number.isFinite(load)) {
+        if (pv >= load * 0.85 && load > 0) {
+            setText('overviewSource', `PV gánh ${formatValue(Math.min(100, pv / load * 100))}% tải`);
+        } else if (Number.isFinite(bat) && bat < -20) {
+            setText('overviewSource', `Pin xả ${formatValue(Math.abs(bat))} W`);
+        } else if (Number.isFinite(grid) && grid > 20) {
+            setText('overviewSource', `Lưới bù ${formatValue(grid)} W`);
+        } else {
+            setText('overviewSource', `PV ${formatValue(pv)} W`);
+        }
+        setText('overviewBalance', `${formatValue(pv - load)} W so với tải`);
+    } else {
+        setText('overviewSource', 'Chờ dữ liệu');
+        setText('overviewBalance', '--');
+    }
+
+    if (Number.isFinite(soc)) {
+        const batteryFlow = Number.isFinite(bat)
+            ? bat > 15 ? `sạc ${formatValue(bat)} W` : bat < -15 ? `xả ${formatValue(Math.abs(bat))} W` : 'cân bằng'
+            : 'chờ công suất';
+        setText('overviewBattery', `SOC ${formatValue(soc)}%, ${batteryFlow}`);
+    } else {
+        setText('overviewBattery', 'Chờ SOC');
+    }
+
+    if (Number.isFinite(maxTemp) && maxTemp >= 60) {
+        setText('overviewHealth', `Nóng ${formatValue(maxTemp, 1)} °C`);
+    } else if (Number.isFinite(loadPercent) && loadPercent >= 85) {
+        setText('overviewHealth', `Tải cao ${formatValue(loadPercent)}%`);
+    } else if (Number.isFinite(realData.cellDiff) && realData.cellDiff >= 0.08) {
+        setText('overviewHealth', `Lệch cell ${formatValue(realData.cellDiff, 3)} V`);
+    } else if (hasRealtimeData()) {
+        setText('overviewHealth', 'Ổn định');
+    } else {
+        setText('overviewHealth', 'Chờ dữ liệu');
+    }
+}
+
 function updateOtherUI() {
+    updateOverviewSummary();
     setText('socVal', formatValue(realData.soc));
     updateSocBattery(realData.soc);
     setText('voltageVal', formatValue(realData.battVoltage, 1));
@@ -900,11 +948,16 @@ drawFlow();
 let dailyChart, monthlyChart, livePowerChart, powerMixChart, batteryTrendChart, temperatureChart, yieldDetailChart;
 let lastHistoryAt = 0;
 const HISTORY_STORAGE_KEY = 'nlmt-history-v2';
+const HISTORY_DB_NAME = 'nlmt-dashboard-cache';
+const HISTORY_DB_VERSION = 1;
+const HISTORY_STORE_NAME = 'history_samples';
 const HISTORY_SAMPLE_INTERVAL = 60 * 1000;
 const HISTORY_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 const MAX_CHART_POINTS = 520;
 let historySamples = loadHistory();
 let selectedRange = {from: Date.now() - 24 * 60 * 60 * 1000, to: null};
+let historyDbPromise = null;
+let historySaveTimer = null;
 
 function initSupabase() {
     if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.anonKey || !window.supabase) {
@@ -996,10 +1049,80 @@ function loadHistory() {
     }
 }
 
+function openHistoryDb() {
+    if (!('indexedDB' in window)) return Promise.resolve(null);
+    if (historyDbPromise) return historyDbPromise;
+    historyDbPromise = new Promise(resolve => {
+        const request = indexedDB.open(HISTORY_DB_NAME, HISTORY_DB_VERSION);
+        request.onupgradeneeded = event => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(HISTORY_STORE_NAME)) {
+                db.createObjectStore(HISTORY_STORE_NAME, {keyPath: 'ts'});
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => {
+            console.warn('IndexedDB history cache unavailable:', request.error?.message || request.error);
+            resolve(null);
+        };
+    });
+    return historyDbPromise;
+}
+
+async function readHistoryCache() {
+    const db = await openHistoryDb();
+    if (!db) return [];
+    return new Promise(resolve => {
+        const transaction = db.transaction(HISTORY_STORE_NAME, 'readonly');
+        const store = transaction.objectStore(HISTORY_STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = () => {
+            const cutoff = Date.now() - HISTORY_RETENTION_MS;
+            const rows = Array.isArray(request.result) ? request.result : [];
+            resolve(rows.filter(sample => Number.isFinite(sample.ts) && sample.ts >= cutoff).sort((a, b) => a.ts - b.ts));
+        };
+        request.onerror = () => resolve([]);
+    });
+}
+
+async function writeHistoryCache(samples) {
+    const db = await openHistoryDb();
+    if (!db) {
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(samples));
+        return;
+    }
+    await new Promise(resolve => {
+        const transaction = db.transaction(HISTORY_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(HISTORY_STORE_NAME);
+        store.clear();
+        samples.forEach(sample => store.put(sample));
+        transaction.oncomplete = resolve;
+        transaction.onerror = resolve;
+    });
+    localStorage.removeItem(HISTORY_STORAGE_KEY);
+}
+
+function scheduleHistorySave() {
+    clearTimeout(historySaveTimer);
+    historySaveTimer = setTimeout(() => {
+        writeHistoryCache(historySamples).catch(err => console.warn('History cache save failed:', err.message));
+    }, 350);
+}
+
+async function hydrateHistoryCache() {
+    const cached = await readHistoryCache();
+    if (!cached.length || cached.length <= historySamples.length) return;
+    historySamples = cached;
+    applyEstimatedProduction(historySamples);
+    applyHistoryToLineCharts();
+    updateInsights();
+    updateSystemStatus();
+}
+
 function saveHistory() {
     const cutoff = Date.now() - HISTORY_RETENTION_MS;
     historySamples = historySamples.filter(sample => sample.ts >= cutoff);
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(historySamples));
+    scheduleHistorySave();
 }
 
 function hasRealtimeData() {
@@ -2005,6 +2128,7 @@ updateOperationMonitor();
 updateInsights();
 updateSystemStatus();
 connectEsphomeRealtime();
+hydrateHistoryCache();
 loadHistoryFromSupabase();
 loadLatestFromSupabase();
 loadProductionFromSupabase();

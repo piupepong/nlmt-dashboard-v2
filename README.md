@@ -8,14 +8,26 @@ Dashboard tinh cho he thong nang luong mat troi.
 - Worker nghe ESPHome SSE tai `ESPHOME_EVENT_URL`.
 - Worker ghi mau moi len Supabase moi phut vao bang `energy_samples`.
 - Web tinh chi doc Supabase cho lich su/san luong, lay dong moi nhat khi nguoi dung mo trang, sau do cap nhat bang Supabase Realtime va poll du phong moi 60 giay.
-- Web nghe them ESPHome SSE truc tiep tai `https://piupepong.ddnsfree.com/events` de topology/so lieu realtime nhay nhanh hon Supabase.
+- Web nghe them ESPHome SSE truc tiep tai `https://esphome.piupepong.ddnsfree.com/events` de topology/so lieu realtime nhay nhanh hon Supabase.
+
+## GitHub Pages
+
+GitHub Pages chi host frontend tinh:
+
+- `index.html`
+- `style.css`
+- `app.js`
+- `supabase-config.js`
+- `assets/`
+
+Frontend dung Supabase anon key trong `supabase-config.js` de doc du lieu va nghe Realtime. Service role key chi duoc dat trong worker/Render/Armbian, khong dua len GitHub Pages.
 
 ## Render env vars
 
 Bat buoc:
 
 ```text
-ESPHOME_EVENT_URL=https://piupepong.ddnsfree.com/events
+ESPHOME_EVENT_URL=https://esphome.piupepong.ddnsfree.com/events
 SUPABASE_URL=https://iopqamrtcuxntcojtqeu.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 SUPABASE_TABLE=energy_samples
@@ -60,7 +72,7 @@ De web cap nhat realtime, bat Realtime cho bang `energy_samples` trong Supabase.
 Trong `supabase-config.js`, `esphomeEventUrl` dang duoc cau hinh qua HTTPS:
 
 ```js
-esphomeEventUrl: "https://piupepong.ddnsfree.com/events"
+esphomeEventUrl: "https://esphome.piupepong.ddnsfree.com/events"
 ```
 
 Endpoint nay tra `text/event-stream` va co CORS, nen GitHub Pages/HTTPS va web LAN deu co the lay truc tiep tu ESPHome. Neu endpoint nay loi, dashboard tu roi ve Supabase fallback va khong ghi database.

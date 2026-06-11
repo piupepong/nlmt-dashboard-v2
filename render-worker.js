@@ -2,7 +2,7 @@ import http from 'http';
 import https from 'https';
 
 const WORKER_VERSION = '2026-05-31-daily-production-v6';
-const EVENT_URL = process.env.ESPHOME_EVENT_URL || 'https://piupepong.ddnsfree.com/events';
+const EVENT_URL = process.env.ESPHOME_EVENT_URL || 'https://esphome.piupepong.ddnsfree.com/events';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_TABLE = process.env.SUPABASE_TABLE || 'energy_samples';
 const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '')
