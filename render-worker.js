@@ -1,5 +1,33 @@
 import http from 'http';
 import https from 'https';
+import fs from 'fs';
+import path from 'path';
+
+// Load .env file (if exists) for local development
+try {
+    const envPath = path.resolve(process.cwd(), '.env');
+    if (fs.existsSync(envPath)) {
+        const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
+            const eqIndex = trimmed.indexOf('=');
+            const key = trimmed.slice(0, eqIndex).trim();
+            let value = trimmed.slice(eqIndex + 1).trim();
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.slice(1, -1);
+            }
+            if (!process.env[key]) process.env[key] = value;
+        }
+    }
+} catch (err) {
+    console.warn('Could not load .env:', err.message);
+}
+
+// Prevent worker crash from unhandled promise rejections
+process.on('unhandledRejection', (reason) => {
+    console.warn('Unhandled rejection:', reason instanceof Error ? reason.message : reason);
+});
 
 const WORKER_VERSION = '2026-05-31-daily-production-v6';
 const EVENT_URL = process.env.ESPHOME_EVENT_URL || 'https://esphome.piupepong.ddnsfree.com/events';
@@ -669,6 +697,9 @@ async function saveSampleToSupabase() {
         lastPersistedRow = {...(lastPersistedRow || {}), ...row};
         lastSaveError = null;
         console.log('Saved sample', row.ts, {pv: row.pv_w, load: row.load_w, bat: row.battery_w, pvKwh: row.daily_pv_kwh});
+    } catch (err) {
+        lastSaveError = err.message;
+        console.warn('saveSampleToSupabase error:', err.message);
     } finally {
         saving = false;
     }
@@ -679,7 +710,11 @@ function scheduleInitialSave() {
     pendingInitialSave = true;
     setTimeout(async () => {
         pendingInitialSave = false;
-        await saveSampleToSupabase();
+        try {
+            await saveSampleToSupabase();
+        } catch (err) {
+            console.warn('Initial save failed:', err.message);
+        }
     }, 2500);
 }
 
@@ -721,7 +756,9 @@ function scheduleReconnect() {
     if (reconnectTimer) return;
     reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
-        connectEvents();
+        connectEvents().catch(err => {
+            console.warn('Reconnect error:', err.message);
+        });
     }, 5000);
 }
 
@@ -800,7 +837,11 @@ http.createServer((req, res) => {
 });
 
 connectEvents();
-setInterval(saveSampleToSupabase, SAMPLE_INTERVAL_MS);
+setInterval(() => {
+    saveSampleToSupabase().catch(err => {
+        console.warn('Interval save failed:', err.message);
+    });
+}, SAMPLE_INTERVAL_MS);
 setInterval(() => {
     if (connected) closeEventsConnection('periodic snapshot refresh');
 }, ESPHOME_REFRESH_INTERVAL_MS);
