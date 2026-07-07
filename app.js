@@ -1405,7 +1405,11 @@ async function loadLatestFromSupabase() {
 }
 
 function subscribeSupabaseRealtime() {
-    if (!supabaseReady || !supabaseClient || supabaseRealtimeChannel) return;
+    if (!supabaseReady || !supabaseClient) return;
+    if (supabaseRealtimeChannel) {
+        try { supabaseClient.removeChannel(supabaseRealtimeChannel); } catch (_) {}
+        supabaseRealtimeChannel = null;
+    }
     supabaseRealtimeChannel = supabaseClient
         .channel(`energy_samples:${DEVICE_ID}`)
         .on('postgres_changes', {
@@ -1420,6 +1424,10 @@ function subscribeSupabaseRealtime() {
             if (status === 'SUBSCRIBED') {
                 supabaseStatus = 'ok';
                 updateSystemStatus();
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                console.warn('Supabase Realtime channel error, will retry:', status);
+                supabaseRealtimeChannel = null;
+                setTimeout(subscribeSupabaseRealtime, 10000);
             }
         });
 }
@@ -2140,4 +2148,4 @@ setInterval(() => {
     }
     updateSystemStatus();
 }, 15000);
-setInterval(loadLatestFromSupabase, 60000);
+setInterval(loadLatestFromSupabase, 10000);
